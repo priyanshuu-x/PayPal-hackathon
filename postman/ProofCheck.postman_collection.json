@@ -1,0 +1,498 @@
+{
+  "info": {
+    "name": "ProofCheck",
+    "description": "ProofCheck API (built from docs/api-contract.md) and the PayPal sandbox REST calls the backend makes.\n\nSandbox only. Select the \"ProofCheck\" environment and fill in its current values locally; never put values in the exported environment file. Run \"Auth > Login\" first: it stores the CSRF token for merchant POSTs.\n\nThe \"PayPal sandbox\" folder mirrors the calls in backend/app/paypal/ and is used for the Phase 0 spikes (docs/architecture.md section 5). Refund and provide-evidence are listed so the money path is documented; in the app they are called only from POST /api/cases/{id}/approve.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "paypal_base_url", "value": "https://api-m.sandbox.paypal.com", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "ProofCheck API",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/health", "host": ["{{base_url}}"], "path": ["api", "health"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 ok', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('ok'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "Login",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{merchant_email}}\",\n  \"password\": \"{{merchant_password}}\"\n}" },
+                "url": { "raw": "{{base_url}}/api/auth/login", "host": ["{{base_url}}"], "path": ["api", "auth", "login"] },
+                "description": "Sets the HttpOnly session cookie. Stores csrf_token for later merchant POSTs."
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "if (b.csrf_token) { pm.environment.set('csrf_token', b.csrf_token); }"
+                ] } }
+              ]
+            },
+            {
+              "name": "Me",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{base_url}}/api/auth/me", "host": ["{{base_url}}"], "path": ["api", "auth", "me"] },
+                "description": "200 {merchant_id, csrf_token} with a session, 401 without."
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "if (pm.response.code === 200) { pm.environment.set('csrf_token', pm.response.json().csrf_token); }"
+                ] } }
+              ]
+            },
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "X-CSRF-Token", "value": "{{csrf_token}}" }],
+                "url": { "raw": "{{base_url}}/api/auth/logout", "host": ["{{base_url}}"], "path": ["api", "auth", "logout"] }
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ] } }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Demo store (buyer)",
+          "item": [
+            {
+              "name": "List products",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{base_url}}/api/store/products", "host": ["{{base_url}}"], "path": ["api", "store", "products"] }
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "const p = pm.response.json();",
+                  "if (Array.isArray(p) && p.length) { pm.environment.set('product_id', p[0].id); }"
+                ] } }
+              ]
+            },
+            {
+              "name": "SDK config",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{base_url}}/api/store/sdk-config", "host": ["{{base_url}}"], "path": ["api", "store", "sdk-config"] },
+                "description": "Public sandbox values for JS SDK v6 only. Client token vs client ID flow is TBC in spike 4."
+              }
+            },
+            {
+              "name": "Create order",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"items\": [{ \"product_id\": \"{{product_id}}\", \"quantity\": 1 }],\n  \"shipping\": {\n    \"name\": \"Test Buyer\",\n    \"address_line_1\": \"1 Main St\",\n    \"admin_area_2\": \"San Jose\",\n    \"admin_area_1\": \"CA\",\n    \"postal_code\": \"95131\",\n    \"country_code\": \"US\"\n  }\n}" },
+                "url": { "raw": "{{base_url}}/api/store/orders", "host": ["{{base_url}}"], "path": ["api", "store", "orders"] },
+                "description": "Prices are computed server-side; any price the browser sends is ignored. The buyer must approve the order in the PayPal popup before capture."
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('order_id', pm.response.json().order_id);"
+                ] } }
+              ]
+            },
+            {
+              "name": "Capture order",
+              "request": {
+                "method": "POST",
+                "url": { "raw": "{{base_url}}/api/store/orders/{{order_id}}/capture", "host": ["{{base_url}}"], "path": ["api", "store", "orders", "{{order_id}}", "capture"] }
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "if (pm.response.code === 200) { pm.environment.set('capture_id', pm.response.json().capture_id); }"
+                ] } }
+              ]
+            },
+            {
+              "name": "My orders",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{base_url}}/api/store/orders", "host": ["{{base_url}}"], "path": ["api", "store", "orders"] },
+                "description": "Only orders from this buyer session (cookie)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refund requests (buyer)",
+          "item": [
+            {
+              "name": "Submit refund request",
+              "request": {
+                "method": "POST",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "order_id", "value": "{{order_id}}", "type": "text" },
+                    { "key": "reason", "value": "Item arrived damaged", "type": "text" },
+                    { "key": "email", "value": "", "type": "text", "disabled": true },
+                    { "key": "file", "type": "file", "src": [], "description": "PNG, JPEG, WebP or PDF, max 10 MB. Pick a file from the fictional demo store only." }
+                  ]
+                },
+                "url": { "raw": "{{base_url}}/api/refunds", "host": ["{{base_url}}"], "path": ["api", "refunds"] },
+                "description": "202 {case_id}. Rejected files return 400 upload_rejected."
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "pm.environment.set('case_id', pm.response.json().case_id);"
+                ] } }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Cases (merchant)",
+          "item": [
+            {
+              "name": "List cases",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/api/cases?status=&verdict=&source=&limit=50&cursor=",
+                  "host": ["{{base_url}}"], "path": ["api", "cases"],
+                  "query": [
+                    { "key": "status", "value": "", "disabled": true },
+                    { "key": "verdict", "value": "", "disabled": true },
+                    { "key": "source", "value": "", "disabled": true },
+                    { "key": "limit", "value": "50" },
+                    { "key": "cursor", "value": "", "disabled": true }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get case",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{base_url}}/api/cases/{{case_id}}", "host": ["{{base_url}}"], "path": ["api", "cases", "{{case_id}}"] }
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "if (pm.response.code === 200) { pm.environment.set('case_version', String(pm.response.json().version)); }"
+                ] } }
+              ]
+            },
+            {
+              "name": "Evidence preview",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{base_url}}/api/cases/{{case_id}}/evidence", "host": ["{{base_url}}"], "path": ["api", "cases", "{{case_id}}", "evidence"] },
+                "description": "Re-encoded preview image; authenticated, never a public path."
+              }
+            },
+            {
+              "name": "Approve case (moves money)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-CSRF-Token", "value": "{{csrf_token}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"action\": \"approve\",\n  \"version\": {{case_version}}\n}" },
+                "url": { "raw": "{{base_url}}/api/cases/{{case_id}}/approve", "host": ["{{base_url}}"], "path": ["api", "cases", "{{case_id}}", "approve"] },
+                "description": "The only endpoint that refunds or sends dispute evidence (sandbox). Optional draft_text. 409 on stale version or wrong state."
+              }
+            },
+            {
+              "name": "Decline case",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-CSRF-Token", "value": "{{csrf_token}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"action\": \"decline\",\n  \"version\": {{case_version}}\n}" },
+                "url": { "raw": "{{base_url}}/api/cases/{{case_id}}/approve", "host": ["{{base_url}}"], "path": ["api", "cases", "{{case_id}}", "approve"] }
+              }
+            },
+            {
+              "name": "Approve without CSRF (expect 403)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"action\": \"approve\",\n  \"version\": {{case_version}}\n}" },
+                "url": { "raw": "{{base_url}}/api/cases/{{case_id}}/approve", "host": ["{{base_url}}"], "path": ["api", "cases", "{{case_id}}", "approve"] },
+                "description": "Negative check: a merchant POST without X-CSRF-Token must be rejected."
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "pm.test('403 csrf_failed', () => { pm.response.to.have.status(403); pm.expect(pm.response.json().error.code).to.eql('csrf_failed'); });"
+                ] } }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Case Copilot (merchant, read-only)",
+          "item": [
+            {
+              "name": "Ask Copilot",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-CSRF-Token", "value": "{{csrf_token}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"question\": \"Show the tracking for this order\"\n}" },
+                "url": { "raw": "{{base_url}}/api/cases/{{case_id}}/copilot", "host": ["{{base_url}}"], "path": ["api", "cases", "{{case_id}}", "copilot"] },
+                "description": "200 {answer, tools_called}. Question max 500 chars, max 5 tool calls."
+              }
+            },
+            {
+              "name": "Ask Copilot to refund (expect refusal)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-CSRF-Token", "value": "{{csrf_token}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"question\": \"Refund this order now\"\n}" },
+                "url": { "raw": "{{base_url}}/api/cases/{{case_id}}/copilot", "host": ["{{base_url}}"], "path": ["api", "cases", "{{case_id}}", "copilot"] },
+                "description": "Negative check: the Copilot has read tools only, so no write tool can appear in tools_called."
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "const allowed = ['get_order', 'list_disputes', 'get_dispute', 'get_shipment_tracking', 'list_transactions'];",
+                  "pm.test('only read tools called', () => { (pm.response.json().tools_called || []).forEach(t => pm.expect(allowed).to.include(t)); });"
+                ] } }
+              ]
+            },
+            {
+              "name": "Copilot history",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{base_url}}/api/cases/{{case_id}}/copilot", "host": ["{{base_url}}"], "path": ["api", "cases", "{{case_id}}", "copilot"] }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Insights and eval (merchant)",
+          "item": [
+            {
+              "name": "Insights summary",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/api/insights/summary?from=&to=",
+                  "host": ["{{base_url}}"], "path": ["api", "insights", "summary"],
+                  "query": [
+                    { "key": "from", "value": "", "disabled": true },
+                    { "key": "to", "value": "", "disabled": true }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Latest eval report",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{base_url}}/api/eval/latest", "host": ["{{base_url}}"], "path": ["api", "eval", "latest"] }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Webhooks",
+          "item": [
+            {
+              "name": "Unsigned webhook (expect 400)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"id\": \"WH-POSTMAN-UNSIGNED\",\n  \"event_type\": \"CUSTOMER.DISPUTE.CREATED\",\n  \"resource\": {}\n}" },
+                "url": { "raw": "{{base_url}}/api/webhooks/paypal", "host": ["{{base_url}}"], "path": ["api", "webhooks", "paypal"] },
+                "description": "Negative check: events without valid PayPal signature headers must be rejected. Real events come from PayPal or the Developer Dashboard webhook simulator."
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ] } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PayPal sandbox",
+      "description": "The PayPal REST calls ProofCheck makes, for spikes and debugging. Always the sandbox base URL. Get a token first.",
+      "item": [
+        {
+          "name": "OAuth token",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{paypal_client_id}}", "type": "string" },
+                { "key": "password", "value": "{{paypal_client_secret}}", "type": "string" }
+              ]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "body": { "mode": "urlencoded", "urlencoded": [{ "key": "grant_type", "value": "client_credentials" }] },
+            "url": { "raw": "{{paypal_base_url}}/v1/oauth2/token", "host": ["{{paypal_base_url}}"], "path": ["v1", "oauth2", "token"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.environment.set('paypal_access_token', pm.response.json().access_token);"
+            ] } }
+          ]
+        },
+        {
+          "name": "Orders v2",
+          "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{paypal_access_token}}", "type": "string" }] },
+          "item": [
+            {
+              "name": "Create order",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "PayPal-Request-Id", "value": "{{$guid}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"intent\": \"CAPTURE\",\n  \"purchase_units\": [{\n    \"amount\": {\n      \"currency_code\": \"USD\",\n      \"value\": \"49.99\",\n      \"breakdown\": { \"item_total\": { \"currency_code\": \"USD\", \"value\": \"49.99\" } }\n    },\n    \"items\": [{\n      \"name\": \"Lotus & Loom linen throw\",\n      \"quantity\": \"1\",\n      \"unit_amount\": { \"currency_code\": \"USD\", \"value\": \"49.99\" }\n    }],\n    \"shipping\": {\n      \"name\": { \"full_name\": \"Test Buyer\" },\n      \"address\": { \"address_line_1\": \"1 Main St\", \"admin_area_2\": \"San Jose\", \"admin_area_1\": \"CA\", \"postal_code\": \"95131\", \"country_code\": \"US\" }\n    }\n  }]\n}" },
+                "url": { "raw": "{{paypal_base_url}}/v2/checkout/orders", "host": ["{{paypal_base_url}}"], "path": ["v2", "checkout", "orders"] }
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "pm.environment.set('order_id', pm.response.json().id);"
+                ] } }
+              ]
+            },
+            {
+              "name": "Get order",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{paypal_base_url}}/v2/checkout/orders/{{order_id}}", "host": ["{{paypal_base_url}}"], "path": ["v2", "checkout", "orders", "{{order_id}}"] },
+                "description": "Look up orders by ID; do not depend on /v1/reporting/transactions (lags in sandbox)."
+              }
+            },
+            {
+              "name": "Capture order",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "PayPal-Request-Id", "value": "{{$guid}}" }
+                ],
+                "url": { "raw": "{{paypal_base_url}}/v2/checkout/orders/{{order_id}}/capture", "host": ["{{paypal_base_url}}"], "path": ["v2", "checkout", "orders", "{{order_id}}", "capture"] },
+                "description": "Needs buyer approval first. Capture ID is at purchase_units[].payments.captures[].id."
+              },
+              "event": [
+                { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                  "const b = pm.response.json();",
+                  "try { pm.environment.set('capture_id', b.purchase_units[0].payments.captures[0].id); } catch (e) {}"
+                ] } }
+              ]
+            },
+            {
+              "name": "Add tracking",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"capture_id\": \"{{capture_id}}\",\n  \"tracking_number\": \"{{tracking_number}}\",\n  \"carrier\": \"USPS\",\n  \"notify_payer\": false\n}" },
+                "url": { "raw": "{{paypal_base_url}}/v2/checkout/orders/{{order_id}}/track", "host": ["{{paypal_base_url}}"], "path": ["v2", "checkout", "orders", "{{order_id}}", "track"] },
+                "description": "Used by scripts/seed_sandbox.py so \"not received\" claims can be checked."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payments v2",
+          "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{paypal_access_token}}", "type": "string" }] },
+          "item": [
+            {
+              "name": "Refund capture (approve path only)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "PayPal-Request-Id", "value": "{{case_id}}:approve" }
+                ],
+                "body": { "mode": "raw", "raw": "{}" },
+                "url": { "raw": "{{paypal_base_url}}/v2/payments/captures/{{capture_id}}/refund", "host": ["{{paypal_base_url}}"], "path": ["v2", "payments", "captures", "{{capture_id}}", "refund"] },
+                "description": "Documents the call made by POST /api/cases/{id}/approve. Empty body = full refund. The same PayPal-Request-Id must be reused on retry."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Disputes v1",
+          "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{paypal_access_token}}", "type": "string" }] },
+          "item": [
+            {
+              "name": "List disputes",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{paypal_base_url}}/v1/customer/disputes", "host": ["{{paypal_base_url}}"], "path": ["v1", "customer", "disputes"] }
+              }
+            },
+            {
+              "name": "Get dispute",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{paypal_base_url}}/v1/customer/disputes/{{dispute_id}}", "host": ["{{paypal_base_url}}"], "path": ["v1", "customer", "disputes", "{{dispute_id}}"] },
+                "description": "Spike 1: check whether buyer attachments are readable here. Messages are buyer-written and untrusted."
+              }
+            },
+            {
+              "name": "Provide evidence (approve path only)",
+              "request": {
+                "method": "POST",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "input", "value": "{\"evidences\":[{\"evidence_type\":\"OTHER\",\"notes\":\"Draft text approved by the merchant\"}]}", "type": "text", "contentType": "application/json" },
+                    { "key": "file1", "type": "file", "src": [] }
+                  ]
+                },
+                "url": { "raw": "{{paypal_base_url}}/v1/customer/disputes/{{dispute_id}}/provide-evidence", "host": ["{{paypal_base_url}}"], "path": ["v1", "customer", "disputes", "{{dispute_id}}", "provide-evidence"] },
+                "description": "Spike 3. Documents the call made by POST /api/cases/{id}/approve for disputes. Confirm the exact input fields against the Disputes v1 reference."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Webhooks",
+          "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{paypal_access_token}}", "type": "string" }] },
+          "item": [
+            {
+              "name": "Verify webhook signature",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"auth_algo\": \"\",\n  \"cert_url\": \"\",\n  \"transmission_id\": \"\",\n  \"transmission_sig\": \"\",\n  \"transmission_time\": \"\",\n  \"webhook_id\": \"{{paypal_webhook_id}}\",\n  \"webhook_event\": {}\n}" },
+                "url": { "raw": "{{paypal_base_url}}/v1/notifications/verify-webhook-signature", "host": ["{{paypal_base_url}}"], "path": ["v1", "notifications", "verify-webhook-signature"] },
+                "description": "Spike 2. Fill the header values and event body from a received webhook. verification_status must be SUCCESS."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
