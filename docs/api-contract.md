@@ -10,7 +10,7 @@ Base path: `/api`. JSON unless stated. Money is a **decimal string** (`"49.99"`)
 ```json
 { "error": { "code": "validation_error", "message": "Human-readable, generic", "case_id": "optional" } }
 ```
-Codes: `validation_error` 422, `unauthenticated` 401, `forbidden` 403, `csrf_failed` 403, `not_found` 404, `conflict` 409 (stale `version` or wrong state), `rate_limited` 429, `upload_rejected` 400, `upstream_error` 502, `internal_error` 500. PayPal and Anthropic error bodies are never returned.
+Codes: `validation_error` 422, `unauthenticated` 401, `forbidden` 403, `csrf_failed` 403, `not_found` 404, `conflict` 409 (stale `version` or wrong state), `rate_limited` 429, `upload_rejected` 400, `upstream_error` 502, `internal_error` 500. PayPal and Groq error bodies are never returned.
 
 **Merchant auth:** `POST /api/auth/login` sets an HttpOnly, Secure, SameSite=Lax session cookie. Every merchant endpoint needs it. Every `POST` made as the merchant also needs header `X-CSRF-Token` (value from `GET /api/auth/me`). Frontend requests use `credentials: "include"`.
 

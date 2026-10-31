@@ -21,8 +21,8 @@ def test_bearer_token_in_text() -> None:
     assert "abcdefgh12345" not in redact_text("header Bearer abcdefgh12345 sent")
 
 
-def test_anthropic_key_in_text() -> None:
-    assert "sk-ant-" not in redact_text("key=sk-ant-api03-ABCDEFGH12345678")
+def test_groq_key_in_text() -> None:
+    assert "gsk_" not in redact_text("using gsk_ABCDEFGH12345678abcdef here")
 
 
 def test_assignment_style_secret() -> None:

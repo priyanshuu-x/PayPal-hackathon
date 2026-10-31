@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     paypal_base_url: str = SANDBOX_BASE_URL
 
     # AI
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-5-5"
-    anthropic_model_cheap: str = "claude-haiku-5-5"
+    groq_api_key: str = ""
+    groq_model_vision: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    groq_model_text: str = "llama-3.3-70b-versatile"
     copilot_max_tool_calls: int = Field(default=5, ge=1, le=5)
 
     # Storage / jobs

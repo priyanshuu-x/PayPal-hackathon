@@ -13,7 +13,7 @@ _SENSITIVE_KEY = re.compile(
 
 _TEXT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"),
-    re.compile(r"\bsk-ant-[A-Za-z0-9_-]{8,}"),
+    re.compile(r"\bgsk_[A-Za-z0-9]{8,}"),
     re.compile(r"\bA[0-9A-Za-z_-]{60,}\b"),  # PayPal-style client IDs / access tokens
     re.compile(
         r"(?i)\b(client_secret|access_token|api_key|password|secret|token)\s*[=:]\s*[^\s,;&\"']+"
