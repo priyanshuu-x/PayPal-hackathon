@@ -1,0 +1,38 @@
+# secrets and local config
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# data (uploads are private, never committed)
+data/
+*.db
+*.sqlite3
+
+# node
+node_modules/
+dist/
+.vite/
+
+# editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# claude local settings
+.claude/settings.local.json
+
+# eval outputs (latest.json is committed deliberately by the eval PR)
+eval/reports/*.tmp
