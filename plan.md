@@ -79,7 +79,7 @@ PayPal ── webhook (CUSTOMER.DISPUTE.*) ────────────�
                                                               └──────────────────────────────────────────────┘ │
                                                                                                                │
      analyze_case (Render Workflows task):  extraction/ (vision LLM, NO tools) → forensics/ → verify/          ◄┘
-                                            (deterministic) → drafting/ (LLM + grounding check)   ──► Anthropic API
+                                            (deterministic) → drafting/ (LLM + grounding check)   ──► Groq API
 
 Merchant ◄──► Dashboard (React, built from the AG Grid + PayPal boilerplate):
               case list (AG Grid) · case detail · Case Copilot chat · Insights (AG Studio) · Approve / Decline
@@ -112,7 +112,7 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 ### 5.2 PayPal — AI and agent development
 | Resource | Used? | How ProofCheck uses it |
 |---|---|---|
-| **PayPal Agent Toolkit** (`paypal-agent-toolkit`, Agent Toolkit quickstart) | Yes, at runtime | Powers the **Case Copilot** (LangChain + Claude) with a read-only tool allowlist (§7.8) |
+| **PayPal Agent Toolkit** (`paypal-agent-toolkit`, Agent Toolkit quickstart) | Yes, at runtime | Powers the **Case Copilot** (LangChain + Groq-hosted Llama) with a read-only tool allowlist (§7.8) |
 | **Agent tools reference** | Yes | Used to choose the read-only allowlist and to confirm that no write tools (e.g. `create_refund`, `accept_dispute_claim`) are enabled |
 | **PayPal AI Toolkit on GitHub** (plugin for Claude Code / Codex / Cursor) | Yes, dev time | Installed in Claude Code: `paypal-best-practices` skill, `/paypal:doctor`, `/paypal:explain-error`, `/paypal:sandbox`, `/paypal:test-accounts`, and the pre-write hook that checks SDK v6 best practices |
 | **PayPal MCP server** (MCP server quickstart) | Yes, dev time | Connected through the AI Toolkit plugin, so the coding agent can inspect sandbox orders and disputes and create test fixtures. **Not used in the runtime money path** (§10) |
@@ -142,8 +142,8 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 |---|---|---|
 | Demo store checkout | React + **PayPal JS SDK v6** | PayPal Checkout / JS SDK v6 |
 | Backend | Python 3.11, FastAPI, Pydantic v2, httpx (async) | PayPal REST API |
-| AI: extraction and drafting | Anthropic API, Claude with vision (`claude-sonnet-5-5`; `claude-haiku-5-5` for cheap eval runs), schema-constrained output | — (our AI model) |
-| AI: Case Copilot | **PayPal Agent Toolkit** (Python, LangChain integration) + `langchain-anthropic` | Agent Toolkit, Agent tools reference |
+| AI: extraction and drafting | Groq API (free tier): a Llama vision model for extraction (`meta-llama/llama-4-scout-17b-16e-instruct`) and a text model for drafting (`llama-3.3-70b-versatile`), schema-constrained JSON output. Model IDs are config; check Groq's current model list | — (our AI model) |
+| AI: Case Copilot | **PayPal Agent Toolkit** (Python, LangChain integration) + `langchain-groq` | Agent Toolkit, Agent tools reference |
 | Background jobs | **Render Workflows** (fallback: FastAPI background tasks) | Render |
 | Matching | rapidfuzz, python-dateutil, `Decimal` | — |
 | Forensics | Pillow, exifread, pypdf; optional c2pa-python | — |
@@ -249,7 +249,7 @@ UX rules: show mismatches first; use plain-language reasons; render all LLM text
 
 ### 7.8 Case Copilot (`backend/app/copilot/`) — PayPal Agent Toolkit, read-only
 - Purpose: answer the merchant's follow-up questions about a case using live PayPal data, e.g. "Show the tracking for this order", "List this buyer's open disputes", "What was the original order total?"
-- Built with the **PayPal Agent Toolkit (Python)** LangChain integration and `ChatAnthropic`.
+- Built with the **PayPal Agent Toolkit (Python)** LangChain integration and `ChatGroq`.
 - **Allowlist (read tools only):** `get_order`, `list_disputes`, `get_dispute`, `get_shipment_tracking`, `list_transactions`. Configure the toolkit's `actions` so only these are enabled, with `sandbox` context. Confirm the exact key names against the quickstart and the Agent tools reference in Phase 0.
 - **Startup guard:** at boot, compare the toolkit's tool names with the allowlist. Any extra tool (e.g. `create_refund`, `accept_dispute_claim`, `create_order`) stops the app from starting.
 - Context given to the Copilot: the case's verified comparison table and IDs only, never the uploaded document text.
@@ -257,7 +257,7 @@ UX rules: show mismatches first; use plain-language reasons; render all LLM text
 - Dispute messages returned by `get_dispute` are buyer-written text and therefore untrusted. Because the Copilot has no write tools and no other network access, the worst a prompt injection there can do is produce a wrong answer, which the merchant can check against the case page.
 
 ### 7.9 Background processing (Render Workflows)
-- `analyze_case(case_id)` task: extraction → forensics → verify → draft; it retries on a transient Anthropic or PayPal error.
+- `analyze_case(case_id)` task: extraction → forensics → verify → draft; it retries on a transient Groq or PayPal error.
 - `run_eval(split)` fans out one task per eval case, then aggregates metrics.
 - Fallback if Workflows isn't available on our plan: FastAPI `BackgroundTasks` locally, and a single worker on Render.
 
@@ -425,7 +425,7 @@ proofcheck/
 - [ ] Hosted demo URL on Render, plus sandbox test logins (buyer, merchant) in the README
 - [ ] Local setup instructions as a fallback (`make dev`)
 - [ ] Text description of features
-- [ ] **"Tools used" section copied from §5**: Claude (extraction, drafting, Copilot), PayPal REST APIs (Orders v2, Payments v2, Disputes v1, Webhooks, tracking), JS SDK v6, Agent Toolkit, AI Toolkit plugin + MCP server (dev), APIMatic Context Plugin (dev), Postman, AG Grid / AG Studio, Render (+ Workflows); and a note on what is not used and why
+- [ ] **"Tools used" section copied from §5**: Groq API with Llama models (extraction, drafting, Copilot), PayPal REST APIs (Orders v2, Payments v2, Disputes v1, Webhooks, tracking), JS SDK v6, Agent Toolkit, AI Toolkit plugin + MCP server (dev), APIMatic Context Plugin (dev), Postman, AG Grid / AG Studio, Render (+ Workflows); and a note on what is not used and why
 - [ ] Postman collection link
 - [ ] APIMatic subscription form submitted (eligible because the Context Plugin was used)
 - [ ] Demo video under 3 minutes, public on YouTube, no copyrighted music or third-party trademarks
@@ -440,7 +440,8 @@ proofcheck/
 | Agent Toolkit Python config differs from the TS examples | Phase 0 spike 5; the allowlist guard fails loudly |
 | AG Studio learning curve | Start from the boilerplate; one custom widget is enough for MVP |
 | LLM misreads degraded photos | `legibility` + confidence → NEEDS_REVIEW |
-| Cost or latency spikes | Haiku for quick eval, cache by file hash, daily cap |
+| Cost, latency or Groq free-tier rate limits | Cache by file hash, daily cap, retry with backoff on 429, run `eval-quick` before the full eval, spread full eval runs over time |
+| Smaller open models misread receipts more often than frontier models | `legibility` + confidence lead to NEEDS_REVIEW; the eval tracks false alarms; deterministic comparison carries the verdict |
 | Time overrun | Cut order in §12; buffer day Nov 10 |
 
 ## 16. Pitch summary (Devpost text)
