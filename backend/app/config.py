@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     # Storage / jobs
     database_url: str = "sqlite:///./proofcheck.db"
     render_workflows_enabled: bool = False
+    render_api_key: str = ""
+    render_workflow_slug: str = ""  # the workflow's slug in Render; tasks are `<slug>/<task>`
     upload_dir: str = "./data/uploads"
 
     # App

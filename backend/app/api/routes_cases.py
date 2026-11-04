@@ -1,21 +1,26 @@
 """Merchant case endpoints (read side). `approve` is added in A7."""
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response
 from sqlmodel import Session, col, select
 
-from app.api.deps import db_dep, merchant_dep, settings_dep
+from app.api.deps import db_dep, dispatcher_dep, merchant_csrf_dep, merchant_dep, settings_dep
 from app.api.errors import ApiError
 from app.api.serializers import case_detail, case_summary
 from app.config import Settings
 from app.db.models import Case, Evidence
 from app.extraction.images import ImageError, pdf_preview_png
+from app.security.audit import append_event
 from app.security.auth import MerchantSession
 from app.security.uploads import UploadRejected, read_file, reencode_preview
+from app.workflows.dispatch import Dispatcher
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
+
+STALE_PROCESSING = timedelta(minutes=10)
 
 
 def _get_case(db: Session, case_id: str) -> Case:
@@ -59,6 +64,38 @@ async def get_case(
     db: Annotated[Session, Depends(db_dep)],
 ) -> dict[str, Any]:
     return case_detail(db, _get_case(db, case_id))
+
+
+@router.post("/{case_id}/reanalyze")
+async def reanalyze_case(
+    case_id: str,
+    session: Annotated[MerchantSession, Depends(merchant_csrf_dep)],
+    db: Annotated[Session, Depends(db_dep)],
+    dispatcher: Annotated[Dispatcher, Depends(dispatcher_dep)],
+    background: BackgroundTasks,
+) -> dict[str, Any]:
+    """Run the analysis again, for example after an error or a temporary PayPal outage.
+
+    It never moves money. Decided cases (approved or declined) are final."""
+    case = _get_case(db, case_id)
+    if case.status in ("approved", "declined"):
+        raise ApiError(409, "conflict", "This case has already been decided.")
+    updated = case.updated_at if case.updated_at.tzinfo else case.updated_at.replace(tzinfo=UTC)
+    if case.status == "processing" and datetime.now(UTC) - updated < STALE_PROCESSING:
+        raise ApiError(409, "conflict", "This case is being analysed right now.")
+    case.status = "new"
+    case.version += 1
+    case.updated_at = datetime.now(UTC)
+    db.add(case)
+    append_event(
+        db,
+        case_id=case.id,
+        actor=f"merchant:{session.merchant_id}",
+        action="reanalysis_requested",
+    )
+    db.commit()
+    await dispatcher.enqueue(case.id, background)
+    return case_summary(case)
 
 
 @router.get("/{case_id}/evidence")

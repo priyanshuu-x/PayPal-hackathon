@@ -11,6 +11,7 @@ from app.api.errors import ApiError
 from app.config import Settings, get_settings
 from app.paypal.client import PayPalClient
 from app.security.auth import MerchantSession, csrf_matches, read_session
+from app.workflows.dispatch import Dispatcher
 
 BUYER_COOKIE = "proofcheck_buyer"
 BUYER_COOKIE_MAX_AGE = 30 * 24 * 3600
@@ -45,6 +46,11 @@ def merchant_csrf_dep(
 def paypal_dep(request: Request) -> PayPalClient:
     client: PayPalClient = request.app.state.paypal
     return client
+
+
+def dispatcher_dep(request: Request) -> Dispatcher:
+    dispatcher: Dispatcher = request.app.state.dispatcher
+    return dispatcher
 
 
 def db_dep(request: Request) -> Iterator[Session]:

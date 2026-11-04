@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlmodel import Session, col, select
 
-from app.db.models import AuditEvent, Case, CheckResult, Draft
+from app.db.models import AuditEvent, Case, CheckResult, Draft, Evidence
 from app.security.audit import verify_chain
 
 
@@ -28,6 +28,15 @@ def case_summary(case: Case) -> dict[str, Any]:
         "created_at": iso_z(case.created_at),
         "version": case.version,
     }
+
+
+def _forensic_notes(db: Session, case: Case) -> list[str]:
+    evidence = db.exec(
+        select(Evidence).where(Evidence.case_id == case.id).order_by(col(Evidence.id))
+    ).first()
+    if evidence is None or not evidence.forensics_json:
+        return []
+    return [str(s["note"]) for s in json.loads(evidence.forensics_json)]
 
 
 def case_detail(db: Session, case: Case) -> dict[str, Any]:
@@ -55,8 +64,8 @@ def case_detail(db: Session, case: Case) -> dict[str, Any]:
             }
             for c in checks
         ],
-        "forensic_notes": [],  # filled by the analysis pipeline (A5/A6)
-        "paypal_record": None,  # filled by the analysis pipeline (A6)
+        "forensic_notes": _forensic_notes(db, case),
+        "paypal_record": json.loads(case.paypal_record_json) if case.paypal_record_json else None,
         "draft": None
         if draft is None
         else {

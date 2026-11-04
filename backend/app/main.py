@@ -21,6 +21,7 @@ from app.llm.groq_client import GroqClient
 from app.logging_config import configure_logging
 from app.paypal.client import PayPalClient
 from app.security.auth import LoginThrottle
+from app.workflows.dispatch import make_dispatcher
 
 
 @asynccontextmanager
@@ -30,10 +31,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     create_db_and_tables(engine)
     paypal = PayPalClient(settings)
     groq = GroqClient(settings)
+    app.state.settings = settings
     app.state.engine = engine
     app.state.paypal = paypal
     app.state.groq = groq
     app.state.login_throttle = LoginThrottle()
+    app.state.dispatcher = make_dispatcher(app, settings)
     try:
         yield
     finally:

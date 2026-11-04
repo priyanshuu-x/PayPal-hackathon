@@ -58,9 +58,21 @@ def paypal_mock(settings_env: None) -> Iterator[respx.MockRouter]:
         yield router
 
 
+class SpyDispatcher:
+    """Records which cases were queued instead of analysing them. Pipeline tests call
+    app.workflows.pipeline.analyze_case directly."""
+
+    def __init__(self) -> None:
+        self.queued: list[str] = []
+
+    async def enqueue(self, case_id: str, background: object) -> None:
+        self.queued.append(case_id)
+
+
 @pytest.fixture
 def client(paypal_mock: respx.MockRouter) -> Iterator[TestClient]:
     with TestClient(create_app()) as test_client:
+        test_client.app.state.dispatcher = SpyDispatcher()  # type: ignore[attr-defined]
         yield test_client
     get_settings.cache_clear()
 

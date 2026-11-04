@@ -94,8 +94,18 @@ def _id(order_id: str) -> str:
     return quote(order_id, safe="")
 
 
+# PayPal answers create and capture with only {id, status, links} unless asked for the full order.
+FULL_RESPONSE = {"Prefer": "return=representation"}
+
+
 async def create_order(client: PayPalClient, payload: dict[str, Any], request_id: str) -> Order:
-    body = await client.request("POST", "/v2/checkout/orders", json=payload, request_id=request_id)
+    body = await client.request(
+        "POST",
+        "/v2/checkout/orders",
+        json=payload,
+        request_id=request_id,
+        extra_headers=FULL_RESPONSE,
+    )
     return Order.model_validate(body)
 
 
@@ -110,5 +120,6 @@ async def capture_order(client: PayPalClient, order_id: str, request_id: str) ->
         f"/v2/checkout/orders/{_id(order_id)}/capture",
         json={},
         request_id=request_id,
+        extra_headers=FULL_RESPONSE,
     )
     return Order.model_validate(body)
