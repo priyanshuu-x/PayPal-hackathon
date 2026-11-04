@@ -12,6 +12,8 @@ HAS_FRONTEND := $(wildcard frontend/package.json)
 setup:
 	uv venv --python 3.11 backend/.venv
 	uv pip install --python $(PY) -e "backend[dev]" pre-commit
+	# PayPal's toolkit alone: its own dependency list is huge and mostly unused (see the file).
+	uv pip install --no-deps --python $(PY) -r backend/requirements-paypal-toolkit.txt
 	$(VENV_BIN)/pre-commit install
 ifneq ($(HAS_FRONTEND),)
 	cd frontend && npm ci
@@ -22,7 +24,7 @@ dev:
 # The frontend dev server (vite :5173) is added by the frontend PRs: run `npm run dev` in frontend/.
 
 test:
-	cd backend && ../$(PY) -m pytest --cov=app.verify --cov=app.drafting.grounding --cov=app.copilot.toolkit --cov-branch --cov-fail-under=100
+	cd backend && ../$(PY) -m pytest --cov=app.verify --cov=app.drafting.grounding --cov=app.copilot.toolkit --cov=app.security.ratelimit --cov=app.security.retention --cov-branch --cov-fail-under=100
 ifneq ($(HAS_FRONTEND),)
 	cd frontend && npm test --if-present
 endif
