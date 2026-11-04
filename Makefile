@@ -22,7 +22,7 @@ dev:
 # The frontend dev server (vite :5173) is added by the frontend PRs: run `npm run dev` in frontend/.
 
 test:
-	cd backend && ../$(PY) -m pytest --cov=app.verify --cov-branch --cov-fail-under=100
+	cd backend && ../$(PY) -m pytest --cov=app.verify --cov=app.drafting.grounding --cov-branch --cov-fail-under=100
 ifneq ($(HAS_FRONTEND),)
 	cd frontend && npm test --if-present
 endif

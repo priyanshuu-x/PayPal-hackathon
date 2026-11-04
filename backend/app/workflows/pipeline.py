@@ -17,10 +17,12 @@ from sqlalchemy import Engine, func, update
 from sqlmodel import Session, col, delete, select
 
 from app.config import Settings
-from app.db.models import Case, CheckResult, Evidence
+from app.db.models import Case, CheckResult, Draft, Evidence
+from app.drafting.draft import draft_refund_note, facts_from_snapshot
 from app.extraction.schema import ClaimedFacts
 from app.extraction.service import ExtractionOutcome, run_extraction
 from app.forensics.signals import analyze as analyze_forensics
+from app.llm.budget import try_consume
 from app.llm.groq_client import GroqClient
 from app.paypal.client import PayPalClient
 from app.paypal.errors import PayPalError
@@ -173,6 +175,40 @@ async def analyze_case(
             json.dumps([asdict(s) for s in report.signals]) if report else None,
             evidence=evidence,
         )
+        if record is not None:
+            await _store_draft(db, case, settings, groq)
+
+
+async def _store_draft(db: Session, case: Case, settings: Settings, groq: GroqClient) -> None:
+    """Write the refund note. A failure here never fails the analysis; the case simply has no
+    draft and the merchant can still decide."""
+    try:
+        snapshot = json.loads(case.paypal_record_json or "null")
+        facts = facts_from_snapshot(snapshot, case.capture_id) if snapshot else None
+        if facts is None:
+            return
+        stores = settings.store_name_list
+        result = await draft_refund_note(
+            groq,
+            model=settings.groq_model_text,
+            facts=facts,
+            store_name=stores[0] if stores else "our store",
+            consume_budget=lambda: try_consume(db, settings.daily_llm_call_cap),
+        )
+        db.add(
+            Draft(
+                case_id=case.id,
+                text=result.text,
+                grounded=result.grounded,
+                unsupported_values_json=json.dumps(list(result.unsupported)),
+                prompt_version=result.prompt_version,
+                model_id=result.model_id,
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("draft_failed", extra={"case_id": case.id})
 
 
 def _problem(field: str, note: str) -> CheckOutcome:

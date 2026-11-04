@@ -52,6 +52,7 @@ def case_detail(db: Session, case: Case) -> dict[str, Any]:
     return {
         **case_summary(case),
         "capture_id": case.capture_id,
+        "refund_id": case.refund_id,
         "dispute_id": case.dispute_id,
         "checks": [
             {
