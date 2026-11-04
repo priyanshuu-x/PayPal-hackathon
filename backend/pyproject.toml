@@ -15,7 +15,7 @@ dependencies = [
     "pillow==13.0.0",
     "pypdf==6.21.4",
     "rapidfuzz==3.10.1",
-    "pypdfium2==4.30.0",
+    "pypdfium2==5.14.0",
     "render==1.7.0",
     "langchain==1.4.8",
     "langchain-core==1.7.4",
