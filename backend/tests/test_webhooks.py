@@ -17,6 +17,22 @@ HEADERS = {
 }
 VERIFY = "/v1/notifications/verify-webhook-signature"
 
+DISPUTE = {
+    "dispute_id": "PP-D-1",
+    "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    "status": "WAITING_FOR_SELLER_RESPONSE",
+    "dispute_amount": {"currency_code": "USD", "value": "52.99"},
+    "seller_response_due_date": "2026-11-20T00:00:00.000Z",
+    "disputed_transactions": [{"seller_transaction_id": "CAP-1"}],
+}
+
+
+def _mock_dispute(paypal: respx.MockRouter) -> None:
+    paypal.get("/v1/customer/disputes/PP-D-1").respond(200, json=DISPUTE)
+    paypal.get("/v2/payments/captures/CAP-1").respond(
+        200, json={"supplementary_data": {"related_ids": {"order_id": "ORD-1"}}}
+    )
+
 
 def _event(event_id: str = "WH-EVT-1", event_type: str = "CUSTOMER.DISPUTE.CREATED") -> dict:
     return {"id": event_id, "event_type": event_type, "resource": {"dispute_id": "PP-D-1"}}
@@ -46,6 +62,7 @@ def test_verified_event_is_accepted_and_audited(
     client: TestClient, paypal_mock: respx.MockRouter
 ) -> None:
     route = _verified(paypal_mock)
+    _mock_dispute(paypal_mock)
     event = _event()
     response = _post(client, event)
     assert response.status_code == 200 and response.json() == {"status": "accepted"}
@@ -102,6 +119,7 @@ def test_unset_webhook_id_rejects_everything(
 
 def test_duplicate_event_id_is_ignored(client: TestClient, paypal_mock: respx.MockRouter) -> None:
     _verified(paypal_mock)
+    _mock_dispute(paypal_mock)
     assert _post(client, _event()).json() == {"status": "accepted"}
     assert _post(client, _event()).json() == {"status": "duplicate"}
     assert _stored(client) == (1, 1)

@@ -104,10 +104,14 @@ class PayPalClient:
         path: str,
         *,
         json: Any = None,
+        files: dict[str, tuple[str | None, bytes | str, str]] | None = None,
         request_id: str | None = None,
         extra_headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Call PayPal and return the parsed JSON body (empty dict for 204).
+
+        `files` sends multipart/form-data parts as (filename, content, content type); use it
+        instead of `json` (the provide-evidence endpoint).
 
         `request_id` becomes the `PayPal-Request-Id` header and is reused on every retry, so a
         retried create, capture or refund can never execute twice.
@@ -120,7 +124,9 @@ class PayPalClient:
             headers.update(extra_headers or {})
             headers["Authorization"] = f"Bearer {await self._access_token()}"
             try:
-                response = await self._http.request(method, path, json=json, headers=headers)
+                response = await self._http.request(
+                    method, path, json=json, files=files, headers=headers
+                )
             except httpx.HTTPError as exc:
                 if attempt + 1 < MAX_ATTEMPTS:
                     await self._sleep(_backoff(attempt, None))

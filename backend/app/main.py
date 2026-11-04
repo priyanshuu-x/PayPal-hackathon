@@ -11,6 +11,7 @@ from app.api import (
     routes_auth,
     routes_cases,
     routes_copilot,
+    routes_demo,
     routes_refunds,
     routes_store,
     routes_webhooks,
@@ -92,14 +93,17 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    for router in (
+    routers = [
         routes_auth.router,
         routes_store.router,
         routes_refunds.router,
         routes_cases.router,
         routes_copilot.router,
         routes_webhooks.router,
-    ):
+    ]
+    if settings.demo_mode:
+        routers.append(routes_demo.router)
+    for router in routers:
         app.include_router(router)
     return app
 

@@ -93,6 +93,30 @@ class Order(_Model):
         return payments.captures if payments else []
 
 
+class DisputedTransaction(_Model):
+    seller_transaction_id: str | None = None  # the capture ID
+    create_time: str | None = None
+    gross_amount: Money | None = None
+
+
+class Dispute(_Model):
+    """Structured dispute fields only. Buyer-written `messages` are deliberately not modelled:
+    they are hostile text and nothing here should ever read them (CLAUDE.md rule 5)."""
+
+    dispute_id: str
+    reason: str | None = None  # PayPal enum, for example MERCHANDISE_OR_SERVICE_NOT_RECEIVED
+    status: str | None = None
+    dispute_life_cycle_stage: str | None = None
+    dispute_amount: Money | None = None
+    seller_response_due_date: str | None = None
+    disputed_transactions: list[DisputedTransaction] = []
+
+    @property
+    def capture_id(self) -> str | None:
+        first = self.disputed_transactions[0] if self.disputed_transactions else None
+        return first.seller_transaction_id if first else None
+
+
 class Refund(_Model):
     id: str
     status: str

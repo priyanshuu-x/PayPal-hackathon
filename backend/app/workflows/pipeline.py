@@ -18,7 +18,7 @@ from sqlmodel import Session, col, delete, select
 
 from app.config import Settings
 from app.db.models import Case, CheckResult, Draft, Evidence
-from app.drafting.draft import draft_refund_note, facts_from_snapshot
+from app.drafting.draft import NoteKind, draft_note, facts_from_snapshot
 from app.extraction.schema import ClaimedFacts
 from app.extraction.service import ExtractionOutcome, run_extraction
 from app.forensics.signals import analyze as analyze_forensics
@@ -30,13 +30,14 @@ from app.paypal.orders import get_order
 from app.security.audit import append_event
 from app.security.uploads import read_file
 from app.verify import verify_case
-from app.verify.models import CheckOutcome, PayPalRecord, VerifyInput
+from app.verify.models import CheckOutcome, ClaimType, PayPalRecord, VerifyInput
 from app.verify.records import record_from_order
 from app.verify.rules import decide_verdict
 from app.verify.scoring import risk_score
 
 logger = logging.getLogger(__name__)
 
+NOT_RECEIVED = "MERCHANDISE_OR_SERVICE_NOT_RECEIVED"  # PayPal dispute reason code
 CLAIMABLE = ("new", "error")  # statuses a worker may pick up
 SYSTEM = "system"
 
@@ -97,6 +98,7 @@ def _record_snapshot(record: PayPalRecord) -> str:
             "payer_name": record.payer_name,
             "shipping_status": record.tracking_status,
             "tracking_number": record.tracking_number,
+            "tracking_carrier": record.tracking_carrier,
         }
     )
 
@@ -121,6 +123,9 @@ async def analyze_case(
     with Session(engine) as db:
         case = _claim(db, case_id)
         if case is None:
+            return
+        if case.source == "dispute":
+            await _analyze_dispute(db, case, settings, paypal, groq)
             return
         evidence = db.exec(
             select(Evidence).where(Evidence.case_id == case_id).order_by(col(Evidence.id))
@@ -188,12 +193,15 @@ async def _store_draft(db: Session, case: Case, settings: Settings, groq: GroqCl
         if facts is None:
             return
         stores = settings.store_name_list
-        result = await draft_refund_note(
+        kind: NoteKind = "dispute" if case.source == "dispute" else "refund"
+        result = await draft_note(
             groq,
+            kind=kind,
             model=settings.groq_model_text,
             facts=facts,
             store_name=stores[0] if stores else "our store",
             consume_budget=lambda: try_consume(db, settings.daily_llm_call_cap),
+            tracking_status=snapshot.get("shipping_status"),
         )
         db.add(
             Draft(
@@ -209,6 +217,49 @@ async def _store_draft(db: Session, case: Case, settings: Settings, groq: GroqCl
     except Exception:
         db.rollback()
         logger.exception("draft_failed", extra={"case_id": case.id})
+
+
+async def _analyze_dispute(
+    db: Session, case: Case, settings: Settings, paypal: PayPalClient, groq: GroqClient
+) -> None:
+    """Flow B. There is no document to read: the dispute's own PayPal data stands in for the
+    claim, so the checks that matter are the ones against PayPal's order record: the order
+    exists, the disputed capture belongs to it, and a "not received" claim against tracking."""
+    record, lookup_failed = await _load_record(case, paypal)
+    if record is None and not lookup_failed:
+        problem = _problem("order", "This dispute could not be linked to an order in PayPal.")
+        _finish(db, case, (problem,), 0, None, None)
+        return
+
+    claimed = ClaimedFacts()
+    if record is not None:
+        claimed = ClaimedFacts(
+            document_type="receipt",
+            order_id=record.order_id,
+            transaction_id=case.capture_id,
+            order_date=record.created_at.date().isoformat(),
+            currency=record.currency,
+            total_amount=str(record.total),
+            field_confidence={
+                "order_id": 1.0,
+                "transaction_id": 1.0,
+                "total_amount": 1.0,
+                "order_date": 1.0,
+            },
+        )
+    claim_type: ClaimType = "not_received" if case.dispute_reason == NOT_RECEIVED else "other"
+    checks = verify_case(
+        VerifyInput(
+            claimed=claimed,
+            record=record,
+            store_names=tuple(settings.store_name_list),
+            lookup_failed=lookup_failed,
+            claim_type=claim_type,
+        )
+    ).checks
+    _finish(db, case, checks, 0, record, None)
+    if record is not None:
+        await _store_draft(db, case, settings, groq)
 
 
 def _problem(field: str, note: str) -> CheckOutcome:

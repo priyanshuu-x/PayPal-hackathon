@@ -30,6 +30,20 @@ def case_summary(case: Case) -> dict[str, Any]:
     }
 
 
+def _dispute(case: Case) -> dict[str, Any] | None:
+    if case.source != "dispute":
+        return None
+    return {
+        "reason": case.dispute_reason,
+        "status": case.dispute_status,
+        "response_due": case.dispute_due,
+    }
+
+
+def _evidence_count(db: Session, case: Case) -> int:
+    return len(db.exec(select(Evidence).where(Evidence.case_id == case.id)).all())
+
+
 def _forensic_notes(db: Session, case: Case) -> list[str]:
     evidence = db.exec(
         select(Evidence).where(Evidence.case_id == case.id).order_by(col(Evidence.id))
@@ -53,6 +67,8 @@ def case_detail(db: Session, case: Case) -> dict[str, Any]:
         **case_summary(case),
         "capture_id": case.capture_id,
         "refund_id": case.refund_id,
+        "dispute": _dispute(case),
+        "evidence_count": _evidence_count(db, case),
         "dispute_id": case.dispute_id,
         "checks": [
             {

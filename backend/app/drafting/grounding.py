@@ -11,6 +11,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 MAX_NOTE_CHARS = 240  # PayPal limits a refund note to 255 characters
+MAX_DISPUTE_NOTE_CHARS = 1500  # dispute evidence notes may be up to 2000
 
 BANNED_TERMS = (
     "fraud", "scam", "fake", "forged", "forgery", "counterfeit",
@@ -120,12 +121,14 @@ def _date_ok(reading: tuple[int | None, int, int], allowed: date) -> bool:
     return parsed == allowed
 
 
-def check_grounding(text: str, facts: GroundingFacts) -> GroundingResult:
+def check_grounding(
+    text: str, facts: GroundingFacts, max_chars: int = MAX_NOTE_CHARS
+) -> GroundingResult:
     unsupported: list[str] = []
     issues: list[str] = []
 
-    if len(text) > MAX_NOTE_CHARS:
-        issues.append(f"longer than {MAX_NOTE_CHARS} characters")
+    if len(text) > max_chars:
+        issues.append(f"longer than {max_chars} characters")
     lowered = text.lower()
     for term in BANNED_TERMS:
         if re.search(rf"\b{term}", lowered):
