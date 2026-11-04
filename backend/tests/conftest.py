@@ -17,6 +17,7 @@ MERCHANT_EMAIL = "merchant@example.com"
 MERCHANT_PASSWORD = "correct horse battery"
 SESSION_SECRET = "s" * 48
 WEBHOOK_ID = "WH-TEST-123"
+MERCHANT_PASSWORD_HASH = hash_password(MERCHANT_PASSWORD)  # scrypt is slow, so hash once
 
 
 @pytest.fixture
@@ -29,7 +30,7 @@ def settings_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("SESSION_SECRET", SESSION_SECRET)
     monkeypatch.setenv("DEMO_MERCHANT_EMAIL", MERCHANT_EMAIL)
-    monkeypatch.setenv("DEMO_MERCHANT_PASSWORD_HASH", hash_password(MERCHANT_PASSWORD))
+    monkeypatch.setenv("DEMO_MERCHANT_PASSWORD_HASH", MERCHANT_PASSWORD_HASH)
     get_settings.cache_clear()
 
 
