@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     paypal_client_secret: str = ""
     paypal_webhook_id: str = ""
     paypal_base_url: str = SANDBOX_BASE_URL
+    paypal_sdk_domains: str = ""  # comma-separated domains for the JS SDK v6 client token
 
     # AI
     groq_api_key: str = ""
@@ -36,6 +37,7 @@ class Settings(BaseSettings):
     daily_llm_call_cap: int = Field(default=500, ge=0)
     retention_days: int = Field(default=30, ge=1)
     cors_allowed_origins: str = "http://localhost:5173"
+    cookie_secure: bool = True  # Chrome accepts Secure cookies on http://localhost
 
     @field_validator("paypal_base_url")
     @classmethod
@@ -47,6 +49,10 @@ class Settings(BaseSettings):
     @property
     def store_name_list(self) -> list[str]:
         return [n.strip() for n in self.store_names.split(";") if n.strip()]
+
+    @property
+    def sdk_domain_list(self) -> list[str]:
+        return [d.strip() for d in self.paypal_sdk_domains.split(",") if d.strip()]
 
     @property
     def cors_origin_list(self) -> list[str]:
