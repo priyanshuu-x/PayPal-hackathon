@@ -17,7 +17,22 @@ MERCHANT_EMAIL = "merchant@example.com"
 MERCHANT_PASSWORD = "correct horse battery"
 SESSION_SECRET = "s" * 48
 WEBHOOK_ID = "WH-TEST-123"
+FAKE_GROQ_KEY = "fake-" + "k" * 24  # built at runtime so scanners see no key-shaped literal
 MERCHANT_PASSWORD_HASH = hash_password(MERCHANT_PASSWORD)  # scrypt is slow, so hash once
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _cached_ssl_context() -> Iterator[None]:
+    """httpx loads the CA bundle for every client (about 1.5 s here). Tests mock the network,
+    so build the context once and reuse it."""
+    import functools
+
+    import httpx._transports.default as transport
+
+    patch = pytest.MonkeyPatch()
+    patch.setattr(transport, "create_ssl_context", functools.cache(transport.create_ssl_context))
+    yield
+    patch.undo()
 
 
 @pytest.fixture

@@ -170,7 +170,7 @@ def test_evidence_preview_is_a_clean_private_png(
     assert b"SecretCameraMaker" not in response.content
 
 
-def test_pdf_has_no_preview_yet(
+def test_pdf_preview_is_the_first_page_as_png(
     client: TestClient, captured_order: str, merchant: dict[str, str]
 ) -> None:
     import io
@@ -182,7 +182,10 @@ def test_pdf_has_no_preview_yet(
     out = io.BytesIO()
     writer.write(out)
     case_id = _submit(client, captured_order, data=out.getvalue()).json()["case_id"]
-    assert client.get(f"/api/cases/{case_id}/evidence").status_code == 404
+    response = client.get(f"/api/cases/{case_id}/evidence")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content.startswith(b"\x89PNG")
 
 
 def test_missing_stored_file_is_404_not_500(
