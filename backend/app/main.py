@@ -7,12 +7,19 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app.api import routes_store
+from app.api import (
+    routes_auth,
+    routes_cases,
+    routes_refunds,
+    routes_store,
+    routes_webhooks,
+)
 from app.api.errors import register_error_handlers
 from app.config import get_settings
 from app.db.session import create_db_and_tables, make_engine
 from app.logging_config import configure_logging
 from app.paypal.client import PayPalClient
+from app.security.auth import LoginThrottle
 
 
 @asynccontextmanager
@@ -23,6 +30,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     paypal = PayPalClient(settings)
     app.state.engine = engine
     app.state.paypal = paypal
+    app.state.login_throttle = LoginThrottle()
     try:
         yield
     finally:
@@ -57,7 +65,14 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    app.include_router(routes_store.router)
+    for router in (
+        routes_auth.router,
+        routes_store.router,
+        routes_refunds.router,
+        routes_cases.router,
+        routes_webhooks.router,
+    ):
+        app.include_router(router)
     return app
 
 
