@@ -1,0 +1,89 @@
+"""Pydantic models for the PayPal fields we read. Unknown fields are ignored."""
+
+from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict
+
+
+class _Model(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class Money(_Model):
+    currency_code: str
+    value: Decimal
+
+
+class OrderItem(_Model):
+    name: str
+    quantity: int
+    unit_amount: Money
+    sku: str | None = None
+
+
+class Capture(_Model):
+    id: str
+    status: str
+    amount: Money
+    create_time: str | None = None
+
+
+class Payments(_Model):
+    captures: list[Capture] = []
+
+
+class Tracker(_Model):
+    id: str | None = None
+    status: str | None = None
+    tracking_number: str | None = None
+    carrier: str | None = None
+
+
+class ShippingName(_Model):
+    full_name: str | None = None
+
+
+class Shipping(_Model):
+    name: ShippingName | None = None
+    trackers: list[Tracker] = []
+
+
+class PurchaseUnit(_Model):
+    reference_id: str | None = None
+    amount: Money
+    items: list[OrderItem] = []
+    shipping: Shipping | None = None
+    payments: Payments | None = None
+
+
+class PayerName(_Model):
+    given_name: str | None = None
+    surname: str | None = None
+
+
+class Payer(_Model):
+    name: PayerName | None = None
+    email_address: str | None = None
+
+
+class Order(_Model):
+    id: str
+    status: str
+    create_time: str | None = None
+    purchase_units: list[PurchaseUnit]
+    payer: Payer | None = None
+
+    @property
+    def total(self) -> Money:
+        return self.purchase_units[0].amount
+
+    @property
+    def captures(self) -> list[Capture]:
+        payments = self.purchase_units[0].payments
+        return payments.captures if payments else []
+
+
+class Refund(_Model):
+    id: str
+    status: str
+    amount: Money | None = None

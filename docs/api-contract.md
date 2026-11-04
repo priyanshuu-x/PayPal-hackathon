@@ -87,15 +87,15 @@ interface CaseDetail extends CaseSummary {
 
 ## Demo store (buyer; JS SDK v6)
 
-SDK v6 setup flow (client token vs client ID) is **TBC** in spike 4. The shapes below stay stable either way.
+SDK v6 setup (confirmed against the sandbox, Phase 0 spike 4): the server fetches a short-lived browser-safe **client token**; the browser calls `paypal.createInstance({ clientToken })`. Order create and capture always go through our backend, never straight to PayPal from the browser.
 
 | Method and path | Body | Response |
 |---|---|---|
 | `GET /api/store/products` | - | `200 [{id, name, price, currency, image}]` |
-| `GET /api/store/sdk-config` | - | `200 {client_id, client_token?}` (sandbox, public values only) |
-| `POST /api/store/orders` | `{items:[{product_id, quantity}], shipping:{name, address_line_1, admin_area_2, admin_area_1, postal_code, country_code}}` | `200 {order_id}`. **Prices are computed server-side**; the browser's price is ignored |
-| `POST /api/store/orders/{order_id}/capture` | - | `200 {order_id, capture_id, status, amount, currency}` |
-| `GET /api/store/orders` | - | `200 [{order_id, capture_id, status, amount, currency, created_at, items}]` (this buyer session only) |
+| `GET /api/store/sdk-config` | - | `200 {client_id, client_token}` (sandbox, public values only; the token is cached server-side for about 10 minutes) |
+| `POST /api/store/orders` | `{items:[{product_id, quantity}], shipping:{name, address_line_1, address_line_2?, admin_area_2, admin_area_1, postal_code, country_code}}` | `200 {order_id, amount, currency}`. **Prices are computed server-side** from the catalog plus a flat shipping fee of `4.99`. Any extra field (for example `price`) is rejected with `422`. 1 to 10 lines, quantity 1 to 10 per product (lines for the same product are merged) |
+| `POST /api/store/orders/{order_id}/capture` | - | `200 {order_id, capture_id, status: "COMPLETED", amount, currency}`. Call it after the buyer approves in the PayPal flow. `404` if the order belongs to another buyer session; `409` if the buyer has not approved yet or the total differs; `502` on a PayPal failure. Repeating the call returns the same result without capturing twice |
+| `GET /api/store/orders` | - | `200 [{order_id, capture_id, status: "created"\|"captured", amount, currency, created_at, items: [{name, quantity, unit_price}]}]` (this buyer session only, newest first) |
 
 ## Refund requests (buyer upload)
 
