@@ -81,9 +81,11 @@ interface CaseDetail extends CaseSummary {
 
 | Method and path | Body | Response |
 |---|---|---|
-| `POST /api/auth/login` | `{email, password}` | `200 {merchant_id, csrf_token}` and session cookie |
-| `POST /api/auth/logout` | - | `204` |
+| `POST /api/auth/login` | `{email, password}` | `200 {merchant_id, csrf_token}` and session cookie (8 hours). Wrong email or password: `401` with the same generic message. 5 failures in 5 minutes for the same IP and email: `429`. `503` if the server has no `SESSION_SECRET` or merchant credentials configured |
+| `POST /api/auth/logout` | - (needs `X-CSRF-Token`) | `204`, session cookie cleared |
 | `GET /api/auth/me` | - | `200 {merchant_id, csrf_token}` or `401` |
+
+The merchant email and password hash come from `.env` (`DEMO_MERCHANT_EMAIL`, `DEMO_MERCHANT_PASSWORD_HASH`). Create the hash with `python -m app.security.auth` and paste the output.
 
 ## Demo store (buyer; JS SDK v6)
 
@@ -100,7 +102,11 @@ SDK v6 setup (confirmed against the sandbox, Phase 0 spike 4): the server fetche
 ## Refund requests (buyer upload)
 
 `POST /api/refunds` (multipart/form-data): `order_id` (string), `reason` (string, max 1000), `email` (optional), `file` (PNG, JPEG, WebP or PDF, max 10 MB).
--> `202 {case_id}`. The file is validated by magic bytes, size and page count. Rejected files return `400 upload_rejected`.
+-> `202 {case_id}`. The case starts as `status: "new"` with no verdict; analysis fills it in later (poll `GET /api/cases/{id}` as the merchant).
+
+- Must be sent from the buyer session that paid for the order (same cookie as the store): `404 not_found` for an order that is not yours or does not exist; `409 conflict` if the order is not paid yet or a refund request for it is already open (`new`, `processing`, `ready` or `approved`).
+- Files are validated by magic bytes (the filename and client MIME type are ignored), size (10 MB), image pixel count and PDF page count (20). Rejected files return `400 upload_rejected` with a short reason. Encrypted PDFs and PDFs with scripts or embedded files are rejected.
+- Field errors (reason over 1000 characters, malformed email, order ID over 64 characters) return `422 validation_error`.
 
 ## Cases (merchant)
 
@@ -108,7 +114,7 @@ SDK v6 setup (confirmed against the sandbox, Phase 0 spike 4): the server fetche
 |---|---|
 | `GET /api/cases?status=&verdict=&source=&limit=&cursor=` | `200 {items: CaseSummary[], next_cursor}` |
 | `GET /api/cases/{id}` | `200 CaseDetail` |
-| `GET /api/cases/{id}/evidence` | Returns a re-encoded preview image (private, authenticated; never a public path) |
+| `GET /api/cases/{id}/evidence` | Returns a re-encoded PNG preview with all metadata removed, at most 2000 px per side (`Cache-Control: private, no-store`; needs the merchant session; never a public path). Use it as an `<img src>`. PDFs return `404` until page rendering lands in A5 |
 | `POST /api/cases/{id}/approve` | Body `{action: "approve" | "decline", version: number, draft_text?: string}`. Needs CSRF. `200 CaseDetail` (status `approved`/`declined`, includes refund or evidence reference). `409` on stale `version` or wrong state. This is the **only** endpoint that moves money or sends evidence |
 
 ## Case Copilot (merchant, read-only)
@@ -120,7 +126,7 @@ SDK v6 setup (confirmed against the sandbox, Phase 0 spike 4): the server fetche
 
 ## Webhooks (PayPal -> backend)
 
-`POST /api/webhooks/paypal` - PayPal-signed. Verified with the verify-webhook-signature API; unverified -> `400`; duplicate event ID -> `200` and ignored. Handled: `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.UPDATED`, `CUSTOMER.DISPUTE.RESOLVED`. Not called by the frontend.
+`POST /api/webhooks/paypal` - PayPal-signed (the five `PAYPAL-*` signature headers are required). Verified with the verify-webhook-signature API before anything is stored; unverified, malformed or oversized (over 1 MB) -> `400`; duplicate event ID -> `200 {"status":"duplicate"}` and ignored. Other responses: `200 {"status":"accepted"}` (a handled type) or `200 {"status":"ignored"}`. Needs `PAYPAL_WEBHOOK_ID`; without it every webhook is rejected. Handled: `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.UPDATED`, `CUSTOMER.DISPUTE.RESOLVED`. Not called by the frontend.
 
 ## Insights and eval (merchant)
 
