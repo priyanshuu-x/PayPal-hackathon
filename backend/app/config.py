@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     daily_llm_call_cap: int = Field(default=500, ge=0)
     retention_days: int = Field(default=30, ge=1)
     cors_allowed_origins: str = "http://localhost:5173"
+    demo_mode: bool = False  # enables POST /api/demo/disputes (sandbox demos only)
     cookie_secure: bool = True  # Chrome accepts Secure cookies on http://localhost
 
     @field_validator("paypal_base_url")

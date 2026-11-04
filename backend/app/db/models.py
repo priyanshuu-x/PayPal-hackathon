@@ -49,6 +49,10 @@ class Case(SQLModel, table=True):
     # Snapshot of the PayPal record the verdict was computed against (JSON).
     paypal_record_json: str | None = None
     refund_id: str | None = None  # PayPal refund created by approve
+    # Structured PayPal dispute fields (enums and a date), never buyer-written text.
+    dispute_reason: str | None = None
+    dispute_status: str | None = None
+    dispute_due: str | None = None
     version: int = 1
     created_at: datetime = Field(default_factory=utcnow, index=True)
     updated_at: datetime = Field(default_factory=utcnow)

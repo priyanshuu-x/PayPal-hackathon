@@ -661,7 +661,7 @@ async def test_a_drafting_crash_never_fails_the_analysis(
     async def boom(*args: object, **kwargs: object) -> None:
         raise RuntimeError("model library exploded")
 
-    monkeypatch.setattr(pipeline, "draft_refund_note", boom)
+    monkeypatch.setattr(pipeline, "draft_note", boom)
     await env.run()
     assert env.case().status == "ready" and _drafts(env) == []
     assert "analysis_completed" in env.actions()

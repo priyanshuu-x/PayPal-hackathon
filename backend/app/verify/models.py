@@ -37,6 +37,7 @@ class PayPalRecord:
     shipping_address: str | None = None
     tracking_status: TrackingStatus | None = None
     tracking_number: str | None = None
+    tracking_carrier: str | None = None
 
 
 @dataclass(frozen=True)

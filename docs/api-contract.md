@@ -63,7 +63,13 @@ interface CaseSummary {
 
 interface CaseDetail extends CaseSummary {
   capture_id: string | null;
-  refund_id: string | null;     // set once approved
+  refund_id: string | null;     // set once a refund case is approved; always null for disputes
+  evidence_count: number;       // documents attached (dispute cases)
+  dispute: {                    // null for refund cases
+    reason: string | null;      // PayPal reason code, for example MERCHANDISE_OR_SERVICE_NOT_RECEIVED
+    status: string | null;      // PayPal dispute status
+    response_due: string | null;
+  } | null;
   dispute_id: string | null;
   checks: CheckResult[];
   forensic_notes: string[];
@@ -121,7 +127,8 @@ SDK v6 setup (confirmed against the sandbox, Phase 0 spike 4): the server fetche
 | `GET /api/cases/{id}` | `200 CaseDetail` |
 | `GET /api/cases/{id}/evidence` | Returns a re-encoded PNG preview with all metadata removed, at most 2000 px per side (`Cache-Control: private, no-store`; needs the merchant session; never a public path). Use it as an `<img src>`. PDFs return `404` until page rendering lands in A5 |
 | `POST /api/cases/{id}/reanalyze` | Needs CSRF. Runs the analysis again (after an error, or a temporary PayPal or AI outage). `200 CaseSummary` with `status: "new"`; poll `GET /api/cases/{id}` until `ready`. `409` for approved or declined cases, and for a case analysed within the last 10 minutes that is still `processing`. Never moves money |
-| `POST /api/cases/{id}/approve` | Body `{action: "approve" \| "decline", version: number, draft_text?: string}`; any other field is rejected (there is no way to choose an amount). Needs a merchant session and CSRF. `200 CaseDetail` with `status: "approved"` and `refund_id` (a full refund of the capture, sent with idempotency key `<case_id>:approve`), or `status: "declined"` (nothing is sent to PayPal). `409` for a stale `version`, a case that is not `ready` (including a double click), a dispute case (not available until A9) or a case with no payment. `422` when the edited note fails the grounding check or is longer than 240 characters; the message names the problem. `502` when PayPal cannot complete the refund: the case goes back to `ready` with a new `version`, so reload it and try again; retrying is safe and never refunds twice. This is the **only** endpoint that moves money |
+| `POST /api/cases/{id}/approve` | Body `{action: "approve" \| "decline", version: number, draft_text?: string}`; any other field is rejected (there is no way to choose an amount). Needs a merchant session and CSRF. `200 CaseDetail` with `status: "approved"` and `refund_id` (a full refund of the capture, sent with idempotency key `<case_id>:approve`), or `status: "declined"` (nothing is sent to PayPal). `409` for a stale `version`, a case that is not `ready` (including a double click), a refund case with no payment, a dispute case with no dispute ID, or an attached document that is missing. `422` when the edited note fails the grounding check or is longer than the limit (240 characters for a refund note, 1500 for a dispute note); the message names the problem. `502` when PayPal cannot complete the action: the case goes back to `ready` with a new `version`, so reload it and try again; retrying is safe and never acts twice. **On a dispute case, approve sends the evidence response to PayPal** (the order's tracking number and carrier when PayPal has them, the note, and any attached documents) and `refund_id` stays `null`; it never accepts the buyer's claim. This is the **only** endpoint that moves money or sends evidence |
+| `POST /api/cases/{id}/evidence` | Dispute cases only. multipart/form-data with one `file` (PNG, JPEG, WebP or PDF, 10 MB, same checks as refund uploads). Needs CSRF. `201 {evidence_count}`. At most 3 documents per case (`409` beyond that, for a refund case, or for an approved or declined case). Documents are stored privately and sent to PayPal only when the merchant approves |
 
 ## Case Copilot (merchant, read-only)
 
@@ -132,7 +139,15 @@ SDK v6 setup (confirmed against the sandbox, Phase 0 spike 4): the server fetche
 
 ## Webhooks (PayPal -> backend)
 
-`POST /api/webhooks/paypal` - PayPal-signed (the five `PAYPAL-*` signature headers are required). Verified with the verify-webhook-signature API before anything is stored; unverified, malformed or oversized (over 1 MB) -> `400`; duplicate event ID -> `200 {"status":"duplicate"}` and ignored. Other responses: `200 {"status":"accepted"}` (a handled type) or `200 {"status":"ignored"}`. Needs `PAYPAL_WEBHOOK_ID`; without it every webhook is rejected. Handled: `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.UPDATED`, `CUSTOMER.DISPUTE.RESOLVED`. Not called by the frontend.
+`POST /api/webhooks/paypal` - PayPal-signed (the five `PAYPAL-*` signature headers are required). Verified with the verify-webhook-signature API before anything is stored; unverified, malformed or oversized (over 1 MB) -> `400`; duplicate event ID -> `200 {"status":"duplicate"}` and ignored. Other responses: `200 {"status":"accepted"}` (a handled type) or `200 {"status":"ignored"}`. Needs `PAYPAL_WEBHOOK_ID`; without it every webhook is rejected. Handled: `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.UPDATED`, `CUSTOMER.DISPUTE.RESOLVED`. Only the dispute ID in the event is used: the server fetches the dispute and its order from PayPal itself, creates a `source: "dispute"` case (status `new`, then analysed like a refund case) or updates the existing one. Buyer-written dispute messages are never read. If the dispute cannot be fetched the event is not recorded and the response is `502`, so PayPal retries it. Not called by the frontend.
+
+### Dispute analysis (what the checks mean)
+
+There is no uploaded document for a dispute; PayPal's own dispute data stands in for the claim. The checks that matter are against PayPal's order record: the order exists, the disputed capture belongs to it, and for the reason `MERCHANDISE_OR_SERVICE_NOT_RECEIVED` the order's tracking status. **Tracking that shows `delivered` against a "not received" claim is a major mismatch, so the verdict is `NEEDS_REVIEW`**: it flags a dispute the merchant may want to contest, and the draft is an evidence note citing the tracking number. A dispute that cannot be linked to an order is `NEEDS_REVIEW`, never a denial. The draft note (at most 1500 characters) goes through the same grounding check as refund notes.
+
+### Demo mode (off by default)
+
+Real sandbox disputes can only be opened by a buyer in PayPal's UI. When the server runs with `DEMO_MODE=true`, `POST /api/demo/disputes` (merchant session and CSRF) takes `{order_id}` of a paid demo-store order and creates a demo dispute case (`dispute_id` starts with `DEMO-`, reason not received). It goes through the same analysis and approve handler, but approving sends nothing to PayPal. `201 {case_id, dispute_id}`; `404` for an unpaid or unknown order; `409` if a dispute case for the order is already open. Without `DEMO_MODE` this endpoint does not exist (`404`). Real webhooks are still signature-verified.
 
 ## Insights and eval (merchant)
 

@@ -64,4 +64,5 @@ def record_from_order(order: Order, *, delivered: bool = False) -> PayPalRecord:
         shipping_address=", ".join(p for p in address_parts if p) or None,
         tracking_status=status,
         tracking_number=tracker.tracking_number if tracker else None,
+        tracking_carrier=tracker.carrier if tracker else None,
     )
