@@ -21,6 +21,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: uv pip install --system -e "backend[dev]"
+      # PayPal's toolkit on its own: its dependency list pulls in ~140 packages we never use.
+      - run: uv pip install --system --no-deps -r backend/requirements-paypal-toolkit.txt
       - name: ruff
         working-directory: backend
         run: ruff check . && ruff format --check .
@@ -29,7 +31,7 @@ jobs:
         run: mypy app
       - name: pytest
         working-directory: backend
-        run: pytest --cov=app.verify --cov=app.drafting.grounding --cov=app.copilot.toolkit --cov-branch --cov-fail-under=100
+        run: pytest --cov=app.verify --cov=app.drafting.grounding --cov=app.copilot.toolkit --cov=app.security.ratelimit --cov=app.security.retention --cov-branch --cov-fail-under=100
 
   frontend:
     runs-on: ubuntu-latest
@@ -52,6 +54,28 @@ jobs:
           npm run lint --if-present
           npx tsc --noEmit
           npm test --if-present
+
+  audit:
+    # Known-vulnerable dependencies (threat model T18). Blocking: fix or upgrade, do not ignore.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Audit the exact backend dependency set
+        run: |
+          uv pip compile backend/pyproject.toml --extra dev --python-version 3.11 -o /tmp/req.txt
+          grep -E "^paypal-agent-toolkit==" backend/requirements-paypal-toolkit.txt >> /tmp/req.txt
+          uv pip install --system pip-audit==2.10.1
+          pip-audit -r /tmp/req.txt --no-deps --disable-pip
+      - name: Audit the frontend runtime dependencies
+        run: |
+          if [ -f frontend/package-lock.json ]; then
+            cd frontend && npm audit --omit=dev --audit-level=high
+          fi
+        continue-on-error: true  # report-only until the frontend lockfile has been reviewed
 
   gitleaks:
     runs-on: ubuntu-latest

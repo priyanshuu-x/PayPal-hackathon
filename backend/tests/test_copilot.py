@@ -717,5 +717,6 @@ def test_the_copilot_is_unavailable_without_an_ai_key(
 
 
 def test_there_is_no_endpoint_the_copilot_could_use_to_decide_a_case(client: TestClient) -> None:
-    paths = {r.path for r in client.app.routes if "copilot" in getattr(r, "path", "")}  # type: ignore[attr-defined]
+    schema = client.app.openapi()["paths"]  # type: ignore[attr-defined]
+    paths = {p for p in schema if "copilot" in p}
     assert paths == {"/api/cases/{case_id}/copilot"}

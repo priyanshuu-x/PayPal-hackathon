@@ -379,10 +379,7 @@ def test_only_the_approve_handler_can_reach_the_refund_function() -> None:
 
 
 def test_no_other_money_endpoints_exist(client: TestClient) -> None:
-    posts = {
-        route.path
-        for route in client.app.routes  # type: ignore[attr-defined]
-        if "POST" in getattr(route, "methods", set())
-    }
+    paths = client.app.openapi()["paths"]  # type: ignore[attr-defined]
+    posts = {path for path, methods in paths.items() if "post" in methods}
     assert "/api/cases/{case_id}/approve" in posts
     assert not any("refund" in p and p != "/api/refunds" for p in posts)

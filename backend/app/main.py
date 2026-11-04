@@ -1,11 +1,16 @@
 """FastAPI app. The Copilot allowlist guard runs at startup. CSP and rate limits: A10."""
 
+import asyncio
+import contextlib
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import RequestResponseEndpoint
+from sqlalchemy import Engine
+from sqlmodel import Session
 
 from app.api import (
     routes_auth,
@@ -24,9 +29,29 @@ from app.copilot.toolkit import assert_read_only, build_toolkit_tools
 from app.db.session import create_db_and_tables, make_engine
 from app.llm.groq_client import GroqClient
 from app.logging_config import configure_logging
+from app.middleware import BodySizeLimitMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
 from app.paypal.client import PayPalClient
 from app.security.auth import LoginThrottle
+from app.security.ratelimit import SlidingWindowLimiter
+from app.security.retention import purge_expired
 from app.workflows.dispatch import make_dispatcher
+
+logger = logging.getLogger(__name__)
+
+RETENTION_INTERVAL_SECONDS = 24 * 3600
+
+
+async def _retention_loop(engine: Engine, upload_dir: str, retention_days: int) -> None:
+    """Delete expired uploads and personal data now, then once a day (threat model T15)."""
+    while True:
+        try:
+            with Session(engine) as db:
+                report = purge_expired(db, Path(upload_dir), retention_days=retention_days)
+            if report.changed:
+                logger.info("retention_run", extra={"report": report.__dict__})
+        except Exception:
+            logger.exception("retention_failed")
+        await asyncio.sleep(RETENTION_INTERVAL_SECONDS)
 
 
 @asynccontextmanager
@@ -58,9 +83,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.groq = groq
     app.state.login_throttle = LoginThrottle()
     app.state.dispatcher = make_dispatcher(app, settings)
+    retention = asyncio.create_task(
+        _retention_loop(engine, settings.upload_dir, settings.retention_days)
+    )
     try:
         yield
     finally:
+        retention.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await retention
         await paypal.aclose()
         await groq.aclose()
         engine.dispose()
@@ -70,9 +101,28 @@ def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
 
-    app = FastAPI(title="ProofCheck API", version="0.1.0", lifespan=lifespan)
+    # No Swagger or ReDoc pages (they load scripts from a CDN and invite probing) and no public
+    # schema; `make postman` reads the schema with app.openapi().
+    app = FastAPI(
+        title="ProofCheck API",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
     register_error_handlers(app)
 
+    # Last added is outermost: security headers wrap everything (including 413 and 429 replies),
+    # then CORS (so error replies carry CORS headers and preflights are not rate limited), then
+    # the size limit, then the rate limiter closest to the app.
+    app.add_middleware(
+        RateLimitMiddleware,
+        limiter=SlidingWindowLimiter(),
+        trusted_proxies=settings.trusted_proxy_count,
+        enabled=settings.rate_limit_enabled,
+    )
+    app.add_middleware(BodySizeLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -80,14 +130,7 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type", "X-CSRF-Token"],
     )
-
-    @app.middleware("http")
-    async def security_headers(request: Request, call_next: RequestResponseEndpoint) -> Response:
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["X-Frame-Options"] = "DENY"
-        return response
+    app.add_middleware(SecurityHeadersMiddleware, hsts=settings.cookie_secure)
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:

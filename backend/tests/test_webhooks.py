@@ -153,5 +153,5 @@ def test_malformed_bodies_are_rejected(client: TestClient, paypal_mock: respx.Mo
 def test_oversized_body_is_rejected(client: TestClient, paypal_mock: respx.MockRouter) -> None:
     route = _verified(paypal_mock)
     big = {"id": "WH-BIG", "event_type": "X", "pad": "a" * (1024 * 1024 + 1)}
-    assert _post(client, big).status_code == 400
+    assert _post(client, big).status_code == 413  # refused by the size limit, before it is read
     assert route.call_count == 0

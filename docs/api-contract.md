@@ -10,13 +10,19 @@ Base path: `/api`. JSON unless stated. Money is a **decimal string** (`"49.99"`)
 ```json
 { "error": { "code": "validation_error", "message": "Human-readable, generic", "case_id": "optional" } }
 ```
-Codes: `validation_error` 422, `unauthenticated` 401, `forbidden` 403, `csrf_failed` 403, `not_found` 404, `conflict` 409 (stale `version` or wrong state), `rate_limited` 429, `upload_rejected` 400, `upstream_error` 502, `internal_error` 500. PayPal and Groq error bodies are never returned.
+Codes: `validation_error` 422, `unauthenticated` 401, `forbidden` 403, `csrf_failed` 403, `not_found` 404, `conflict` 409 (stale `version` or wrong state), `rate_limited` 429, `payload_too_large` 413, `upload_rejected` 400, `upstream_error` 502, `internal_error` 500. PayPal and Groq error bodies are never returned.
 
 **Merchant auth:** `POST /api/auth/login` sets an HttpOnly, Secure, SameSite=Lax session cookie. Every merchant endpoint needs it. Every `POST` made as the merchant also needs header `X-CSRF-Token` (value from `GET /api/auth/me`). Frontend requests use `credentials: "include"`.
 
 **Buyer (store) endpoints** need no login. The server issues an anonymous buyer-session cookie on the first store call; `GET /api/store/orders` returns only that session's orders.
 
-**Rate limits:** per-IP on store, refund and auth endpoints; `429` with `Retry-After`.
+**Rate limits** (per client IP, per minute unless noted; the reply is `429 rate_limited` with a `Retry-After` header in seconds, so show "try again in N seconds"): login 10; refund uploads 5 per 10 minutes; creating or capturing a store order 30; `GET /api/store/sdk-config` 30; evidence uploads 20 per 10 minutes; webhooks 300; every other `/api` call 240; `/api/health` is exempt. The Copilot has its own limit (20 questions per 10 minutes per merchant) and login also locks after 5 wrong passwords for the same email and IP. Handle `429` on every call: a busy browser tab can reach 240 requests a minute if it polls too fast (poll a case no faster than every 2 seconds).
+
+**Request size:** at most 10.25 MB for an upload (`POST /api/refunds`, `POST /api/cases/{id}/evidence`) and 1 MB for anything else; larger requests get `413 payload_too_large` before the body is read.
+
+**Response headers:** every reply carries `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, cross-origin isolation headers and `Cache-Control: no-store` (and HSTS over HTTPS). The API serves JSON and images only, never HTML, so none of these affect normal use. There are no `/docs`, `/redoc` or public OpenAPI pages.
+
+**Data retention:** uploaded files, extracted text and forensic notes, the buyer's reason and email, the payer's name in the record snapshot and the Copilot's question history are deleted 30 days after creation (`RETENTION_DAYS`). Cases, checks, verdicts and the audit log stay. After that, `GET /api/cases/{id}/evidence` returns `404` and a dispute case with a removed document cannot be approved until the document is added again.
 
 **Text from models** (`reasons`, `draft.text`, Copilot `answer`) is plain text. Render it as plain text only.
 
