@@ -16,6 +16,8 @@ dependencies = [
     "rapidfuzz==3.10.1",
     "pypdfium2==4.30.0",
     "render==1.7.0",
+    "paypal-agent-toolkit==1.11.0",
+    "langchain-groq==0.3.8",
 ]
 
 [project.optional-dependencies]

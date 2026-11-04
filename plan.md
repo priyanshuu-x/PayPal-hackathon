@@ -250,7 +250,7 @@ UX rules: show mismatches first; use plain-language reasons; render all LLM text
 ### 7.8 Case Copilot (`backend/app/copilot/`) — PayPal Agent Toolkit, read-only
 - Purpose: answer the merchant's follow-up questions about a case using live PayPal data, e.g. "Show the tracking for this order", "List this buyer's open disputes", "What was the original order total?"
 - Built with the **PayPal Agent Toolkit (Python)** LangChain integration and `ChatGroq`.
-- **Allowlist (read tools only):** `get_order`, `list_disputes`, `get_dispute`, `get_shipment_tracking`, `list_transactions`. Configure the toolkit's `actions` so only these are enabled, with `sandbox` context. Confirm the exact key names against the quickstart and the Agent tools reference in Phase 0.
+- **Allowlist (read tools only):** `get_order_details`, `list_disputes`, `get_dispute`, `get_shipment_tracking`, `list_transactions` (the toolkit calls the first one `get_order_details`). Configure the toolkit's `actions` so only these are enabled (`orders.get`, `disputes.list`, `disputes.get`, `shipment.get`, `transactions.list`), with `sandbox` context. Confirmed against `paypal-agent-toolkit` 1.11.0: its LangChain integration is `paypal_agent_toolkit.langchain`; model calls go through `langchain-groq`.
 - **Startup guard:** at boot, compare the toolkit's tool names with the allowlist. Any extra tool (e.g. `create_refund`, `accept_dispute_claim`, `create_order`) stops the app from starting.
 - Context given to the Copilot: the case's verified comparison table and IDs only, never the uploaded document text.
 - Limits: at most 5 tool calls per question; per-session rate limit; answers rendered as plain text; the Copilot cannot change verdicts or trigger approval.
