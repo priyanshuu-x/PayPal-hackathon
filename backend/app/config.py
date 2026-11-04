@@ -20,8 +20,8 @@ class Settings(BaseSettings):
 
     # AI
     groq_api_key: str = ""
-    groq_model_vision: str = "meta-llama/llama-4-scout-17b-16e-instruct"
-    groq_model_text: str = "llama-3.3-70b-versatile"
+    groq_model_vision: str = "qwen/qwen3.8-27b"
+    groq_model_text: str = "openai/gpt-oss-120b"
     copilot_max_tool_calls: int = Field(default=5, ge=1, le=5)
 
     # Storage / jobs

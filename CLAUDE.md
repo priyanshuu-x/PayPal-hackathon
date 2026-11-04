@@ -118,8 +118,8 @@ VITE_PAYPAL_CLIENT_ID=            # sandbox client ID for JS SDK v6 (public by d
 
 # AI
 GROQ_API_KEY=
-GROQ_MODEL_VISION=meta-llama/llama-4-scout-17b-16e-instruct   # extraction (needs image input)
-GROQ_MODEL_TEXT=llama-3.3-70b-versatile                       # drafting and Copilot
+GROQ_MODEL_VISION=qwen/qwen3.8-27b                              # extraction (needs image input)
+GROQ_MODEL_TEXT=openai/gpt-oss-120b                           # drafting and Copilot (tool calling)
 COPILOT_MAX_TOOL_CALLS=5
 
 # AG Grid / AG Studio (trial license; injected at build time, never committed)

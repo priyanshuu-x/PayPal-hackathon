@@ -112,7 +112,7 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 ### 5.2 PayPal — AI and agent development
 | Resource | Used? | How ProofCheck uses it |
 |---|---|---|
-| **PayPal Agent Toolkit** (`paypal-agent-toolkit`, Agent Toolkit quickstart) | Yes, at runtime | Powers the **Case Copilot** (LangChain + Groq-hosted Llama) with a read-only tool allowlist (§7.8) |
+| **PayPal Agent Toolkit** (`paypal-agent-toolkit`, Agent Toolkit quickstart) | Yes, at runtime | Powers the **Case Copilot** (LangChain + Groq-hosted `openai/gpt-oss-120b`) with a read-only tool allowlist (§7.8) |
 | **Agent tools reference** | Yes | Used to choose the read-only allowlist and to confirm that no write tools (e.g. `create_refund`, `accept_dispute_claim`) are enabled |
 | **PayPal AI Toolkit on GitHub** (plugin for Claude Code / Codex / Cursor) | Yes, dev time | Installed in Claude Code: `paypal-best-practices` skill, `/paypal:doctor`, `/paypal:explain-error`, `/paypal:sandbox`, `/paypal:test-accounts`, and the pre-write hook that checks SDK v6 best practices |
 | **PayPal MCP server** (MCP server quickstart) | Yes, dev time | Connected through the AI Toolkit plugin, so the coding agent can inspect sandbox orders and disputes and create test fixtures. **Not used in the runtime money path** (§10) |
@@ -142,7 +142,7 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 |---|---|---|
 | Demo store checkout | React + **PayPal JS SDK v6** | PayPal Checkout / JS SDK v6 |
 | Backend | Python 3.11, FastAPI, Pydantic v2, httpx (async) | PayPal REST API |
-| AI: extraction and drafting | Groq API (free tier): a Llama vision model for extraction (`meta-llama/llama-4-scout-17b-16e-instruct`) and a text model for drafting (`llama-3.3-70b-versatile`), schema-constrained JSON output. Model IDs are config; check Groq's current model list | — (our AI model) |
+| AI: extraction and drafting | Groq API (free tier): a vision model for extraction (`qwen/qwen3.8-27b`, the only current Groq chat model that accepts images) and a text model for drafting and the Copilot (`openai/gpt-oss-120b`, which supports tool calling), JSON output validated by Pydantic. Groq retires models often, so IDs are config; check `GET /openai/v1/models` | — (our AI model) |
 | AI: Case Copilot | **PayPal Agent Toolkit** (Python, LangChain integration) + `langchain-groq` | Agent Toolkit, Agent tools reference |
 | Background jobs | **Render Workflows** (fallback: FastAPI background tasks) | Render |
 | Matching | rapidfuzz, python-dateutil, `Decimal` | — |
@@ -425,7 +425,7 @@ proofcheck/
 - [ ] Hosted demo URL on Render, plus sandbox test logins (buyer, merchant) in the README
 - [ ] Local setup instructions as a fallback (`make dev`)
 - [ ] Text description of features
-- [ ] **"Tools used" section copied from §5**: Groq API with Llama models (extraction, drafting, Copilot), PayPal REST APIs (Orders v2, Payments v2, Disputes v1, Webhooks, tracking), JS SDK v6, Agent Toolkit, AI Toolkit plugin + MCP server (dev), APIMatic Context Plugin (dev), Postman, AG Grid / AG Studio, Render (+ Workflows); and a note on what is not used and why
+- [ ] **"Tools used" section copied from §5**: Groq API with Qwen and OpenAI gpt-oss models (extraction, drafting, Copilot), PayPal REST APIs (Orders v2, Payments v2, Disputes v1, Webhooks, tracking), JS SDK v6, Agent Toolkit, AI Toolkit plugin + MCP server (dev), APIMatic Context Plugin (dev), Postman, AG Grid / AG Studio, Render (+ Workflows); and a note on what is not used and why
 - [ ] Postman collection link
 - [ ] APIMatic subscription form submitted (eligible because the Context Plugin was used)
 - [ ] Demo video under 3 minutes, public on YouTube, no copyrighted music or third-party trademarks
