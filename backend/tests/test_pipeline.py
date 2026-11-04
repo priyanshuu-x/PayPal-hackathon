@@ -10,10 +10,10 @@ import pytest
 import respx
 from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.config import SANDBOX_BASE_URL, Settings
-from app.db.models import AuditEvent, Case, CheckResult, Evidence, LlmUsage
+from app.db.models import AuditEvent, Case, CheckResult, Draft, Evidence, LlmUsage
 from app.db.session import create_db_and_tables, make_engine
 from app.llm.groq_client import GROQ_BASE_URL, GroqClient
 from app.paypal.client import PayPalClient
@@ -601,3 +601,79 @@ async def test_case_detail_shows_the_record_and_forensic_notes(env: Env) -> None
     assert detail["forensic_notes"] == ["The file was saved by Canva."]
     assert detail["audit_chain_valid"] is True
     assert [c["field"] for c in detail["checks"]][:2] == ["order", "amount"]
+
+
+# --- the draft step -----------------------------------------------------------------------
+
+
+def _drafts(env: Env) -> list[Draft]:
+    with Session(env.engine) as db:
+        return list(db.exec(select(Draft).order_by(col(Draft.id))).all())
+
+
+def _note(text: str) -> httpx.Response:
+    return httpx.Response(200, json={"choices": [{"message": {"content": text}}]})
+
+
+async def test_a_grounded_draft_is_stored_after_the_analysis(env: Env) -> None:
+    env.add_case()
+    note = f"Your refund of 52.99 USD for order {ORDER_ID} is on its way. Thank you!"
+    env.chat.mock(side_effect=[reply(GOOD), _note(note)])
+    await env.run()
+    [draft] = _drafts(env)
+    assert (draft.text, draft.grounded, draft.model_id) == (
+        note,
+        True,
+        env.settings.groq_model_text,
+    )
+    assert draft.prompt_version == "DRAFT_V1" and draft.edited_by_human is False
+    assert env.chat.calls[1].request.content.count(b"tools") == 0
+
+
+async def test_an_ungrounded_model_note_is_replaced_by_the_template(env: Env) -> None:
+    env.add_case()
+    env.chat.mock(
+        side_effect=lambda request: (
+            reply(GOOD)
+            if b"image_url" in request.content
+            else _note("Refund of $1.00 arrives in 3 days.")
+        )
+    )
+    await env.run()
+    [draft] = _drafts(env)
+    assert draft.prompt_version == "TEMPLATE_V1" and draft.model_id is None
+    assert f"52.99 USD for order {ORDER_ID}" in draft.text
+    assert env.chat.call_count == 1 + 3  # one extraction plus three drafting tries
+
+
+async def test_no_record_means_no_draft(env: Env) -> None:
+    env.add_case()
+    env.order.mock(return_value=httpx.Response(404, json={"name": "RESOURCE_NOT_FOUND"}))
+    await env.run()
+    assert _drafts(env) == []
+
+
+async def test_a_drafting_crash_never_fails_the_analysis(
+    env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env.add_case()
+
+    async def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("model library exploded")
+
+    monkeypatch.setattr(pipeline, "draft_refund_note", boom)
+    await env.run()
+    assert env.case().status == "ready" and _drafts(env) == []
+    assert "analysis_completed" in env.actions()
+
+
+async def test_a_damaged_snapshot_means_no_draft(env: Env) -> None:
+    env.add_case()
+    with Session(env.engine) as db:
+        case = db.get(Case, "c1")
+        assert case is not None
+        case.paypal_record_json = '{"order_id": "x"}'
+        db.add(case)
+        db.commit()
+        await pipeline._store_draft(db, case, env.settings, env.groq)
+    assert _drafts(env) == []
