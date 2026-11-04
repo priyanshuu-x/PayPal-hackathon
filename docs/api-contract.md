@@ -127,8 +127,8 @@ SDK v6 setup (confirmed against the sandbox, Phase 0 spike 4): the server fetche
 
 | Method and path | Notes |
 |---|---|
-| `POST /api/cases/{id}/copilot` | Body `{question}` (max 500 chars). Needs CSRF. `200 {answer, tools_called: string[]}`. Max 5 tool calls per question. It cannot approve, refund or change a verdict |
-| `GET /api/cases/{id}/copilot` | `200 [{question, answer, tools_called, created_at}]` |
+| `POST /api/cases/{id}/copilot` | Body `{question}` (1 to 500 chars; other fields are rejected). Needs CSRF. `200 {answer, tools_called: string[]}`; `answer` is **plain text** (render it as text only; control characters and Markdown emphasis are already stripped, at most 2000 characters) and `tools_called` lists the PayPal lookups it made (`get_order_details`, `list_disputes`, `get_dispute`, `get_shipment_tracking`, `list_transactions`). Max 5 lookups per question; 20 questions per 10 minutes per merchant (`429`). `503` when the server has no AI key. The Copilot can only read: it cannot approve, refund, accept a dispute, change a verdict or send anything, and asking it to just gets a refusal. It sees the case summary and verified check results, never the uploaded document's text, the buyer's message or the draft. Answers can take 1 to 15 seconds |
+| `GET /api/cases/{id}/copilot` | `200 [{question, answer, tools_called: string[], created_at}]`, oldest first, at most 50 |
 
 ## Webhooks (PayPal -> backend)
 
