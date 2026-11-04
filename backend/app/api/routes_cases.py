@@ -11,6 +11,7 @@ from app.api.errors import ApiError
 from app.api.serializers import case_detail, case_summary
 from app.config import Settings
 from app.db.models import Case, Evidence
+from app.extraction.images import ImageError, pdf_preview_png
 from app.security.auth import MerchantSession
 from app.security.uploads import UploadRejected, read_file, reencode_preview
 
@@ -72,11 +73,14 @@ async def get_evidence_preview(
     evidence = db.exec(
         select(Evidence).where(Evidence.case_id == case_id).order_by(col(Evidence.id))
     ).first()
-    if evidence is None or not evidence.mime.startswith("image/"):
+    if evidence is None:
         raise ApiError(404, "not_found", "No preview is available for this case.")
     try:
-        preview = reencode_preview(read_file(Path(settings.upload_dir), evidence.storage_key))
-    except (FileNotFoundError, UploadRejected) as exc:
+        data = read_file(Path(settings.upload_dir), evidence.storage_key)
+        preview = (
+            pdf_preview_png(data) if evidence.mime == "application/pdf" else reencode_preview(data)
+        )
+    except (FileNotFoundError, UploadRejected, ImageError) as exc:
         raise ApiError(404, "not_found", "No preview is available for this case.") from exc
     return Response(
         preview,

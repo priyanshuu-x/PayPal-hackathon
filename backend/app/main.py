@@ -17,6 +17,7 @@ from app.api import (
 from app.api.errors import register_error_handlers
 from app.config import get_settings
 from app.db.session import create_db_and_tables, make_engine
+from app.llm.groq_client import GroqClient
 from app.logging_config import configure_logging
 from app.paypal.client import PayPalClient
 from app.security.auth import LoginThrottle
@@ -28,13 +29,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = make_engine(settings.database_url)
     create_db_and_tables(engine)
     paypal = PayPalClient(settings)
+    groq = GroqClient(settings)
     app.state.engine = engine
     app.state.paypal = paypal
+    app.state.groq = groq
     app.state.login_throttle = LoginThrottle()
     try:
         yield
     finally:
         await paypal.aclose()
+        await groq.aclose()
         engine.dispose()
 
 

@@ -113,6 +113,13 @@ class AuditEvent(SQLModel, table=True):
     hash: str = Field(unique=True)
 
 
+class LlmUsage(SQLModel, table=True):
+    """Model calls made per UTC day, for DAILY_LLM_CALL_CAP."""
+
+    day: str = Field(primary_key=True)  # YYYY-MM-DD
+    calls: int = 0
+
+
 class WebhookEvent(SQLModel, table=True):
     """Dedupe table: one row per PayPal webhook event ID we have accepted."""
 
