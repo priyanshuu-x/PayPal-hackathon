@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from app.paypal.models import Order
+from app.paypal.models import Order, Tracker
 from app.verify.models import PayPalRecord, RecordItem, TrackingStatus
 
 
@@ -13,14 +13,19 @@ def _parse_time(value: str | None) -> datetime:
     return parsed.astimezone(UTC) if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
+def _latest_tracker(order: Order) -> Tracker | None:
+    shipping = order.purchase_units[0].shipping
+    trackers = shipping.trackers if shipping else []
+    return trackers[-1] if trackers else None
+
+
 def tracking_status(order: Order) -> TrackingStatus:
     """Map order trackers to our status. Orders v2 trackers carry SHIPPED or CANCELLED; a
     'delivered' status has to come from another source and is passed in by the caller."""
-    shipping = order.purchase_units[0].shipping
-    trackers = shipping.trackers if shipping else []
-    if not trackers:
+    tracker = _latest_tracker(order)
+    if tracker is None:
         return "none"
-    status = (trackers[-1].status or "").upper()
+    status = (tracker.status or "").upper()
     if status == "DELIVERED":
         return "delivered"
     if status == "CANCELLED":
@@ -45,6 +50,7 @@ def record_from_order(order: Order, *, delivered: bool = False) -> PayPalRecord:
         if address
         else []
     )
+    tracker = _latest_tracker(order)
     status = "delivered" if delivered else tracking_status(order)
     return PayPalRecord(
         order_id=order.id,
@@ -57,4 +63,5 @@ def record_from_order(order: Order, *, delivered: bool = False) -> PayPalRecord:
         payer_email=payer.email_address if payer else None,
         shipping_address=", ".join(p for p in address_parts if p) or None,
         tracking_status=status,
+        tracking_number=tracker.tracking_number if tracker else None,
     )

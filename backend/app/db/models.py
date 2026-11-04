@@ -46,6 +46,8 @@ class Case(SQLModel, table=True):
     # Buyer-written text: hostile input. Never placed in a prompt (CLAUDE.md rule 5).
     reason: str | None = None
     buyer_email: str | None = None
+    # Snapshot of the PayPal record the verdict was computed against (JSON).
+    paypal_record_json: str | None = None
     version: int = 1
     created_at: datetime = Field(default_factory=utcnow, index=True)
     updated_at: datetime = Field(default_factory=utcnow)

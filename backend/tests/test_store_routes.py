@@ -63,6 +63,7 @@ def test_create_order_computes_the_price_server_side(
     assert unit["items"][0]["sku"] == "lotus-tote"
     assert unit["shipping"]["address"]["country_code"] == "US"
     assert paypal_mock.calls.last.request.headers["paypal-request-id"].startswith("create:")
+    assert paypal_mock.calls.last.request.headers["prefer"] == "return=representation"
 
 
 def test_browser_supplied_price_is_rejected(client: TestClient) -> None:
@@ -137,6 +138,7 @@ def test_capture_happy_path_and_idempotent_replay(
         "currency": "USD",
     }
     assert capture.calls.last.request.headers["paypal-request-id"] == "capture:ORD-1"
+    assert capture.calls.last.request.headers["prefer"] == "return=representation"
 
     again = client.post("/api/store/orders/ORD-1/capture")
     assert again.status_code == 200

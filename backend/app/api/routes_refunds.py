@@ -9,15 +9,16 @@ import uuid
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, UploadFile
 from sqlmodel import Session, select
 
-from app.api.deps import DEMO_MERCHANT_ID, buyer_dep, db_dep, settings_dep
+from app.api.deps import DEMO_MERCHANT_ID, buyer_dep, db_dep, dispatcher_dep, settings_dep
 from app.api.errors import ApiError
 from app.config import Settings
 from app.db.models import Case, Evidence, StoreOrder
 from app.security.audit import append_event
 from app.security.uploads import MAX_BYTES, UploadRejected, store_file, validate_upload
+from app.workflows.dispatch import Dispatcher
 
 router = APIRouter(prefix="/api/refunds", tags=["refunds"])
 
@@ -33,6 +34,8 @@ async def create_refund_request(
     buyer_id: Annotated[str, Depends(buyer_dep)],
     db: Annotated[Session, Depends(db_dep)],
     settings: Annotated[Settings, Depends(settings_dep)],
+    dispatcher: Annotated[Dispatcher, Depends(dispatcher_dep)],
+    background: BackgroundTasks,
     email: Annotated[str | None, Form(max_length=254)] = None,
 ) -> dict[str, str]:
     if email and not _EMAIL_RE.fullmatch(email.strip()):
@@ -99,4 +102,5 @@ async def create_refund_request(
         db.rollback()
         (Path(settings.upload_dir) / key).unlink(missing_ok=True)
         raise
+    await dispatcher.enqueue(case.id, background)
     return {"case_id": case.id}

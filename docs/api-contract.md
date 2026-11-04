@@ -102,7 +102,7 @@ SDK v6 setup (confirmed against the sandbox, Phase 0 spike 4): the server fetche
 ## Refund requests (buyer upload)
 
 `POST /api/refunds` (multipart/form-data): `order_id` (string), `reason` (string, max 1000), `email` (optional), `file` (PNG, JPEG, WebP or PDF, max 10 MB).
--> `202 {case_id}`. The case starts as `status: "new"` with no verdict; analysis fills it in later (poll `GET /api/cases/{id}` as the merchant).
+-> `202 {case_id}`. The case starts as `status: "new"` and analysis starts in the background (Render Workflows when configured, otherwise a local task). Status goes `new`, `processing`, then `ready` with a verdict, usually within a few seconds but up to about 30 s. Poll `GET /api/cases/{id}` as the merchant. If analysis crashes the status is `error` and the merchant can use `reanalyze`. Anything the system cannot verify (PayPal unreachable, unreadable document, daily AI limit reached) ends as `ready` with verdict `NEEDS_REVIEW` and a major check explaining why.
 
 - Must be sent from the buyer session that paid for the order (same cookie as the store): `404 not_found` for an order that is not yours or does not exist; `409 conflict` if the order is not paid yet or a refund request for it is already open (`new`, `processing`, `ready` or `approved`).
 - Files are validated by magic bytes (the filename and client MIME type are ignored), size (10 MB), image pixel count and PDF page count (20). Rejected files return `400 upload_rejected` with a short reason. Encrypted PDFs and PDFs with scripts or embedded files are rejected.
@@ -115,6 +115,7 @@ SDK v6 setup (confirmed against the sandbox, Phase 0 spike 4): the server fetche
 | `GET /api/cases?status=&verdict=&source=&limit=&cursor=` | `200 {items: CaseSummary[], next_cursor}` |
 | `GET /api/cases/{id}` | `200 CaseDetail` |
 | `GET /api/cases/{id}/evidence` | Returns a re-encoded PNG preview with all metadata removed, at most 2000 px per side (`Cache-Control: private, no-store`; needs the merchant session; never a public path). Use it as an `<img src>`. PDFs return `404` until page rendering lands in A5 |
+| `POST /api/cases/{id}/reanalyze` | Needs CSRF. Runs the analysis again (after an error, or a temporary PayPal or AI outage). `200 CaseSummary` with `status: "new"`; poll `GET /api/cases/{id}` until `ready`. `409` for approved or declined cases, and for a case analysed within the last 10 minutes that is still `processing`. Never moves money |
 | `POST /api/cases/{id}/approve` | Body `{action: "approve" | "decline", version: number, draft_text?: string}`. Needs CSRF. `200 CaseDetail` (status `approved`/`declined`, includes refund or evidence reference). `409` on stale `version` or wrong state. This is the **only** endpoint that moves money or sends evidence |
 
 ## Case Copilot (merchant, read-only)
