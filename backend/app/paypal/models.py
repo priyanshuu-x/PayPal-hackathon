@@ -43,8 +43,18 @@ class ShippingName(_Model):
     full_name: str | None = None
 
 
+class Address(_Model):
+    address_line_1: str | None = None
+    address_line_2: str | None = None
+    admin_area_2: str | None = None  # city
+    admin_area_1: str | None = None  # state or province
+    postal_code: str | None = None
+    country_code: str | None = None
+
+
 class Shipping(_Model):
     name: ShippingName | None = None
+    address: Address | None = None
     trackers: list[Tracker] = []
 
 
