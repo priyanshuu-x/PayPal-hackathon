@@ -1,9 +1,15 @@
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router';
 import { AppShell, ComingSoon, type NavItem } from './components/app-shell';
+import { CartProvider } from './store/cart';
+import { CheckoutPage } from './store/checkout-page';
+import { OrdersPage } from './store/orders-page';
+import { RefundPage } from './store/refund-page';
+import { ShopPage } from './store/shop-page';
 
 // Two areas: the fictional demo store for sandbox buyers, and the merchant app under /merchant.
 const storeNav: NavItem[] = [
   { to: '/', label: 'Shop' },
+  { to: '/checkout', label: 'Checkout' },
   { to: '/orders', label: 'My orders' },
 ];
 
@@ -16,13 +22,17 @@ const merchantNav: NavItem[] = [
 const router = createBrowserRouter([
   {
     element: (
-      <AppShell area="Lotus & Loom Demo Store" nav={storeNav}>
-        <Outlet />
-      </AppShell>
+      <CartProvider>
+        <AppShell area="Lotus & Loom Demo Store" nav={storeNav}>
+          <Outlet />
+        </AppShell>
+      </CartProvider>
     ),
     children: [
-      { path: '/', element: <ComingSoon title="Shop" pr="B3 (demo store, JS SDK v6 checkout)" /> },
-      { path: '/orders', element: <ComingSoon title="My orders" pr="B3 (orders and refund form)" /> },
+      { path: '/', element: <ShopPage /> },
+      { path: '/checkout', element: <CheckoutPage /> },
+      { path: '/orders', element: <OrdersPage /> },
+      { path: '/orders/:orderId/refund', element: <RefundPage /> },
     ],
   },
   {
