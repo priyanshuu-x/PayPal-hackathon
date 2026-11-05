@@ -1,0 +1,11 @@
+# The PayPal Agent Toolkit, installed WITHOUT its dependency list:
+#
+#   uv pip install --no-deps -r backend/requirements-paypal-toolkit.txt
+#
+# Why: the toolkit declares dependencies for its OpenAI and CrewAI integrations
+# (crewai-tools, openai-agents, an old pinned langchain). We use only its LangChain tools, and
+# those extra packages pull in about 140 libraries we never import, several with known
+# vulnerabilities and no fix, and they cap pypdf and langchain-core at vulnerable versions.
+# Everything the LangChain tools need (langchain, langchain-core, requests, pydantic) is pinned in
+# pyproject.toml. app/copilot/toolkit.py fails loudly at startup if the toolkit cannot be imported.
+paypal-agent-toolkit==1.11.0
