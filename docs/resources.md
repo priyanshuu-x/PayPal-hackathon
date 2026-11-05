@@ -20,7 +20,7 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 ## 5.2 PayPal — AI and agent development
 | Resource | Used? | How ProofCheck uses it |
 |---|---|---|
-| **PayPal Agent Toolkit** (`paypal-agent-toolkit`, Agent Toolkit quickstart) | Yes, at runtime | Powers the **Case Copilot** (LangChain + Claude) with a read-only tool allowlist (§7.8) |
+| **PayPal Agent Toolkit** (`paypal-agent-toolkit`, Agent Toolkit quickstart) | Yes, at runtime | Powers the **Case Copilot** (LangChain + Groq-hosted `openai/gpt-oss-120b`) with a read-only tool allowlist (§7.8) |
 | **Agent tools reference** | Yes | Used to choose the read-only allowlist and to confirm that no write tools (e.g. `create_refund`, `accept_dispute_claim`) are enabled |
 | **PayPal AI Toolkit on GitHub** (plugin for Claude Code / Codex / Cursor) | Yes, dev time | Installed in Claude Code: `paypal-best-practices` skill, `/paypal:doctor`, `/paypal:explain-error`, `/paypal:sandbox`, `/paypal:test-accounts`, and the pre-write hook that checks SDK v6 best practices |
 | **PayPal MCP server** (MCP server quickstart) | Yes, dev time | Connected through the AI Toolkit plugin, so the coding agent can inspect sandbox orders and disputes and create test fixtures. **Not used in the runtime money path** (§10) |
