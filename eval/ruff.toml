@@ -1,0 +1,5 @@
+# Same rules as the backend; tests may use assert and fake credentials.
+extend = "../backend/pyproject.toml"
+
+[lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
