@@ -12,14 +12,28 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code: ErrorCode | 'network_error';
   readonly caseId: string | undefined;
+  /** From `Retry-After` on a 429: show "try again in N seconds". */
+  readonly retryAfterSeconds: number | undefined;
 
-  constructor(status: number, code: ApiError['code'], message: string, caseId?: string) {
+  constructor(
+    status: number,
+    code: ApiError['code'],
+    message: string,
+    caseId?: string,
+    retryAfterSeconds?: number,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.caseId = caseId;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+function retryAfter(response: Response): number | undefined {
+  const seconds = Number(response.headers.get('Retry-After'));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
 // Set from POST /api/auth/login or GET /api/auth/me; sent on every POST as X-CSRF-Token.
@@ -80,9 +94,9 @@ async function request<T>(method: 'GET' | 'POST', path: string, options: Request
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     if (isErrorBody(data)) {
-      throw new ApiError(response.status, data.error.code, data.error.message, data.error.case_id);
+      throw new ApiError(response.status, data.error.code, data.error.message, data.error.case_id, retryAfter(response));
     }
-    throw new ApiError(response.status, 'internal_error', GENERIC_MESSAGE);
+    throw new ApiError(response.status, 'internal_error', GENERIC_MESSAGE, undefined, retryAfter(response));
   }
   return data as T;
 }

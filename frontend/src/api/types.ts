@@ -15,6 +15,7 @@ export type ErrorCode =
   | 'not_found'
   | 'conflict'
   | 'rate_limited'
+  | 'payload_too_large'
   | 'upload_rejected'
   | 'upstream_error'
   | 'internal_error';
@@ -40,14 +41,16 @@ export interface Product {
   image: string;
 }
 
+/** For `paypal.createInstance({ clientToken })` (JS SDK v6). Public, short-lived values. */
 export interface SdkConfig {
   client_id: string;
-  client_token?: string;
+  client_token: string;
 }
 
 export interface ShippingAddress {
   name: string;
   address_line_1: string;
+  address_line_2?: string;
   admin_area_2: string;
   admin_area_1: string;
   postal_code: string;
@@ -59,10 +62,17 @@ export interface CreateOrderRequest {
   shipping: ShippingAddress;
 }
 
+/** Server-computed total (catalog prices plus flat shipping). */
+export interface CreatedOrder {
+  order_id: string;
+  amount: string;
+  currency: string;
+}
+
 export interface CapturedOrder {
   order_id: string;
   capture_id: string;
-  status: string;
+  status: 'COMPLETED';
   amount: string;
   currency: string;
 }
@@ -73,7 +83,12 @@ export interface OrderItem {
   unit_price: string;
 }
 
-export interface BuyerOrder extends CapturedOrder {
+export interface BuyerOrder {
+  order_id: string;
+  capture_id: string | null;
+  status: 'created' | 'captured';
+  amount: string;
+  currency: string;
   created_at: string;
   items: OrderItem[];
 }
@@ -130,8 +145,21 @@ export interface AuditEntry {
   hash: string;
 }
 
+export interface DisputeInfo {
+  /** PayPal reason code, e.g. MERCHANDISE_OR_SERVICE_NOT_RECEIVED */
+  reason: string | null;
+  status: string | null;
+  response_due: string | null;
+}
+
 export interface CaseDetail extends CaseSummary {
   capture_id: string | null;
+  /** Set once a refund case is approved; always null for disputes. */
+  refund_id: string | null;
+  /** Documents attached (dispute cases). */
+  evidence_count: number;
+  /** Null for refund cases. */
+  dispute: DisputeInfo | null;
   dispute_id: string | null;
   checks: CheckResult[];
   forensic_notes: string[];
@@ -162,10 +190,18 @@ export interface CaseDecision {
 
 // --- Copilot ----------------------------------------------------------------------
 
+/** The Copilot's read-only PayPal lookups (backend/app/copilot/toolkit.py READ_ONLY_TOOLS). */
+export type CopilotTool =
+  | 'get_order_details'
+  | 'list_disputes'
+  | 'get_dispute'
+  | 'get_shipment_tracking'
+  | 'list_transactions';
+
 export interface CopilotAnswer {
-  /** Model-written. Render as plain text only. */
+  /** Model-written, at most 2000 characters. Render as plain text only. */
   answer: string;
-  tools_called: string[];
+  tools_called: CopilotTool[];
 }
 
 export interface CopilotTurn extends CopilotAnswer {

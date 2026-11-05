@@ -73,6 +73,16 @@ describe('request', () => {
     });
   });
 
+  it('reads Retry-After on 429', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'rate_limited', message: 'Too many requests' } }), {
+        status: 429,
+        headers: { 'Retry-After': '42' },
+      }),
+    );
+    await expect(api.post('/refunds')).rejects.toMatchObject({ code: 'rate_limited', retryAfterSeconds: 42 });
+  });
+
   it('never surfaces a non-contract error body', async () => {
     respond(502, '<html>upstream stack trace</html>');
     const error = await api.get('/cases').catch((e: unknown) => e);
