@@ -48,15 +48,20 @@ import metrics
 import report
 from dataset import EvalCase, Manifest, load_manifest
 from fakes import CountingTransport, OracleLLM, RecordedPayPal
+from sampling import Progress, ProviderLimit, run_key, sample_proportional
 
 MANIFEST = _paths.DATASETS / "manifest.json"
 QUICK_SIZE = 20
 
 
-def select_cases(manifest: Manifest, split: str, quick: bool, limit: int | None) -> list[EvalCase]:
+def select_cases(
+    manifest: Manifest, split: str, quick: bool, limit: int | None, size: int | None = None
+) -> list[EvalCase]:
     pool = [c for c in manifest.cases if split == "all" or c.split == split]
     if quick:
         pool = stratified([c for c in manifest.cases if c.split == "tune"], QUICK_SIZE)
+    elif size:
+        pool = sample_proportional(pool, size)
     if limit:
         pool = pool[:limit]
     # Reused-file cases last, so the file they reuse is already in the database.
@@ -177,6 +182,11 @@ class Runner:
             draft = db.exec(
                 select(Draft).where(Draft.case_id == case_id).order_by(col(Draft.id).desc())
             ).first()
+            if any(
+                c.field == "extraction" and c.note.startswith("Analysis limit reached")
+                for c in checks
+            ):
+                raise ProviderLimit(case.id)  # not a verdict about the document: do not score it
             verdict = row.verdict if row and row.status == "ready" and row.verdict else "ERROR"
             extracted = (
                 json.loads(evidence.extracted_json)
@@ -249,7 +259,7 @@ async def run(args: argparse.Namespace) -> int:
         print(f"{args.manifest} not found. Build it first: python eval/generate_cases.py")
         return 2
     manifest = load_manifest(args.manifest)
-    cases = select_cases(manifest, args.split, args.quick, args.limit)
+    cases = select_cases(manifest, args.split, args.quick, args.limit, args.size)
     base = get_settings()
     oracle = args.llm == "oracle"
     if not oracle and not base.groq_api_key:
@@ -274,15 +284,38 @@ async def run(args: argparse.Namespace) -> int:
         )
         runner = Runner(manifest, settings, oracle=oracle, datasets_dir=args.manifest.parent)
         results = []
+        key = run_key(
+            [c.id for c in cases], args.llm, base.groq_model_vision, EXTRACT_VERSION, DRAFT_VERSION
+        )
+        progress = Progress(_paths.REPORTS / f"progress-{key}.jsonl")
+        done = progress.load() if args.resume else {}
+        if not args.resume:
+            progress.start_fresh()
+        elif done:
+            print(f"Resuming: {len(done)} of {len(cases)} cases already done.")
         try:
             for n, case in enumerate(cases, 1):
-                result = await runner.run_case(case)
+                if case.id in done:
+                    results.append(done[case.id])
+                    continue
+                try:
+                    result = await runner.run_case(case)
+                except ProviderLimit:
+                    print(
+                        f"\nThe AI provider's usage limit was reached after {len(results)} of "
+                        f"{len(cases)} cases. Progress is saved. Run the same command again "
+                        "with --resume once the limit has cleared (Groq's free tier resets "
+                        "gradually over 24 hours)."
+                    )
+                    return 3
                 results.append(result)
+                progress.append(result)
                 mark = "ok" if result.verdict in case.acceptable_verdicts else "WRONG"
                 extra = f"  ({result.error})" if result.error else ""
                 print(
                     f"[{n:>3}/{len(cases)}] {case.id:<24} {result.verdict:<23} {mark}"
-                    f"  {result.latency_s:.1f}s{extra}"
+                    f"  {result.latency_s:.1f}s{extra}",
+                    flush=True,
                 )
         finally:
             await runner.close()
@@ -308,6 +341,8 @@ async def run(args: argparse.Namespace) -> int:
             "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "split": args.split if not args.quick else "tune",
             "quick": args.quick,
+            "sample_size": len(cases),
+            "full_dataset_size": len(manifest.cases),
             "llm": args.llm,
             "data_source": manifest.source,
             "vision_model": "oracle" if oracle else base.groq_model_vision,
@@ -327,6 +362,7 @@ async def run(args: argparse.Namespace) -> int:
         "cases": [asdict(r) for r in results],
     }
     path = report.write(full, _paths.REPORTS, quick=args.quick, oracle=oracle)
+    progress.finish()
     s = summary
     print(
         f"\nverdict accuracy {s['verdict_accuracy']}, "
@@ -349,6 +385,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--copilot", action="store_true", help="also evaluate the Case Copilot (live)"
     )
     parser.add_argument("--limit", type=int, help="run only the first N selected cases")
+    parser.add_argument(
+        "--size",
+        type=int,
+        help="a stratified sample of about N cases (every bucket, both splits) instead of all",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue a run that stopped (provider limit or interruption) without redoing cases",
+    )
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
     return parser.parse_args(argv)
 
