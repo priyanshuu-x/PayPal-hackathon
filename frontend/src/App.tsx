@@ -1,5 +1,6 @@
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router';
 import { AppShell, ComingSoon, type NavItem } from './components/app-shell';
+import { MerchantGate } from './dashboard/merchant-gate';
 import { CartProvider } from './store/cart';
 import { CheckoutPage } from './store/checkout-page';
 import { OrdersPage } from './store/orders-page';
@@ -39,13 +40,15 @@ const router = createBrowserRouter([
     path: '/merchant',
     element: (
       <AppShell area="Merchant" nav={merchantNav}>
-        <Outlet />
+        <MerchantGate />
       </AppShell>
     ),
     children: [
-      { index: true, element: <ComingSoon title="Cases" pr="B6 (AG Grid case list and case detail)" /> },
-      { path: 'insights', element: <ComingSoon title="Insights" pr="B8 (AG Studio dashboard)" /> },
-      { path: 'eval', element: <ComingSoon title="Eval report" pr="B8 (eval report page)" /> },
+      // Loaded on demand, so store buyers never download AG Grid or AG Studio.
+      { index: true, lazy: async () => ({ Component: (await import('./dashboard/cases-page')).CasesPage }) },
+      { path: 'cases/:caseId', lazy: async () => ({ Component: (await import('./dashboard/case-detail-page')).CaseDetailPage }) },
+      { path: 'insights', lazy: async () => ({ Component: (await import('./insights/insights-page')).InsightsPage }) },
+      { path: 'eval', lazy: async () => ({ Component: (await import('./insights/eval-page')).EvalPage }) },
     ],
   },
   { path: '*', element: <ComingSoon title="Page not found" pr="no PR: check the address" /> },

@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import {
+  CellStyleModule,
   ClientSideRowModelModule,
   ColumnAutoSizeModule,
   DateFilterModule,
@@ -25,8 +26,9 @@ if (import.meta.env.DEV) {
 }
 
 // Only the grid features we use: in-memory rows, filters for each column type, the search box
-// (quick filter) and sizing columns to their content.
+// (quick filter), cell classes (verdict colours) and sizing columns to their content.
 const modules = [
+  CellStyleModule,
   ClientSideRowModelModule,
   TextFilterModule,
   NumberFilterModule,
@@ -62,7 +64,7 @@ const columnTypes: ColTypeDefs<Row> = {
 const defaultColDef: ColDef<Row> = { filter: true };
 const autoSizeStrategy = { type: 'fitCellContents' } as const;
 
-export function DataGrid<T extends Row>({
+export function DataGrid<T extends object>({
   rows,
   columns,
   onRowClicked,
