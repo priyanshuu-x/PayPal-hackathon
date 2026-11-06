@@ -9,8 +9,15 @@ from app.db import models  # noqa: F401  (registers tables)
 
 
 def make_engine(database_url: str) -> Engine:
-    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    return create_engine(database_url, connect_args=connect_args)
+    # Some providers still hand out postgres:// URLs, which SQLAlchemy 2 refuses.
+    if database_url.startswith("postgres://"):
+        database_url = "postgresql://" + database_url.removeprefix("postgres://")
+    sqlite = database_url.startswith("sqlite")
+    return create_engine(
+        database_url,
+        connect_args={"check_same_thread": False} if sqlite else {},
+        pool_pre_ping=not sqlite,  # a managed Postgres closes idle connections; test before use
+    )
 
 
 def create_db_and_tables(engine: Engine) -> None:
