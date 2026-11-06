@@ -19,7 +19,11 @@ logger = logging.getLogger(__name__)
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=30.0, pool=5.0)
 MAX_ATTEMPTS = 4  # first try plus up to 3 retries on 429 / 5xx / network errors
-MAX_RETRY_WAIT = 10.0
+MAX_BACKOFF = 10.0  # cap for our own exponential backoff (network errors, 5xx)
+# Groq's free tier limits the vision model to 7000 input tokens a minute (about four receipts), and
+# answers 429 with how long to wait (usually 20 to 30 s). Analysis runs in the background, so
+# waiting that long beats failing the case; the cap protects against absurd values.
+MAX_RETRY_AFTER = 60.0
 
 Sleep = Callable[[float], Awaitable[None]]
 
@@ -111,7 +115,7 @@ def _message_text(response: httpx.Response) -> str:
 def _backoff(attempt: int, retry_after: str | None) -> float:
     if retry_after:
         try:
-            return min(float(retry_after), MAX_RETRY_WAIT)
+            return min(float(retry_after) + 0.5, MAX_RETRY_AFTER)
         except ValueError:
             pass
-    return min(1.0 * (2**attempt), MAX_RETRY_WAIT)
+    return min(1.0 * (2**attempt), MAX_BACKOFF)
