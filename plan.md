@@ -42,7 +42,7 @@ When a customer submits evidence (a refund request through the merchant's form, 
 - **Merchant dashboard:** case list (AG Grid), case detail (side-by-side "document says / PayPal says"), and an **Insights page built on AG Studio** with at least one custom widget and a ProofCheck theme.
 - **Evaluation harness** with a labelled dataset and a published metrics report (§9).
 - **Security controls** (§10).
-- **Hosted on Render**; case analysis and eval runs on **Render Workflows** (fallback: background tasks).
+- **Hosted on Render**; case analysis runs in the API process (background tasks). Render Workflows task code is included but off (see §7.9).
 - **Postman collection** of the ProofCheck API and the PayPal calls it makes, published for judges.
 - README with sandbox test logins and the "Tools used" section from §5.
 
@@ -121,7 +121,7 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 ### 5.3 Sponsor tools
 | Sponsor | Used? | How ProofCheck uses it |
 |---|---|---|
-| **Render** | Yes | Hosting (web service, static site, Postgres) using the $50 hackathon credits; **Render Workflows** runs `analyze_case` per case and fans out the eval run across cases |
+| **Render** | Yes | Hosting (web service, static site, Postgres) using the $50 hackathon credits; Render Workflows task code is included (`backend/app/workflows/`), but it is **off in this deployment**: analysis runs in the API process, because a workflow task cannot read the API's private upload disk |
 | **AG Grid / AG Studio** | Yes | Case list grid; **Insights page in AG Studio** with a custom "mismatch types" widget, a ProofCheck theme, verdict-mix and amount-at-risk tiles; frontend started from the **`paypaldev/hackathon-paypal-ag-grid-boilerplate`**; 45-day trial license. Stretch: Studio Agent Framework |
 | **APIMatic** | Yes, dev time | **APIMatic Context Plugin for PayPal** installed in Claude Code, so the coding agent pulls accurate PayPal API context while building `paypal/`. Claim the free subscription through the form on the sponsor page |
 | **Postman** | Yes | Fork **PayPal's public Postman collection** for the Phase 0 API spikes; publish `postman/ProofCheck.postman_collection.json` (ProofCheck endpoints + the PayPal calls it makes) with an environment file without secrets |
@@ -144,7 +144,7 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 | Backend | Python 3.11, FastAPI, Pydantic v2, httpx (async) | PayPal REST API |
 | AI: extraction and drafting | Groq API (free tier): a vision model for extraction (`qwen/qwen3.8-27b`, the only current Groq chat model that accepts images) and a text model for drafting and the Copilot (`openai/gpt-oss-120b`, which supports tool calling), JSON output validated by Pydantic. Groq retires models often, so IDs are config; check `GET /openai/v1/models` | — (our AI model) |
 | AI: Case Copilot | **PayPal Agent Toolkit** (Python, LangChain integration) + `langchain-groq` | Agent Toolkit, Agent tools reference |
-| Background jobs | **Render Workflows** (fallback: FastAPI background tasks) | Render |
+| Background jobs | FastAPI background tasks. Render Workflows code is included but off (§7.9) | Render |
 | Matching | rapidfuzz, python-dateutil, `Decimal` | — |
 | Forensics | Pillow, exifread, pypdf; optional c2pa-python | — |
 | DB | SQLModel; SQLite (dev), Postgres (Render) | Render |
@@ -256,10 +256,10 @@ UX rules: show mismatches first; use plain-language reasons; render all LLM text
 - Limits: at most 5 tool calls per question; per-session rate limit; answers rendered as plain text; the Copilot cannot change verdicts or trigger approval.
 - Dispute messages returned by `get_dispute` are buyer-written text and therefore untrusted. Because the Copilot has no write tools and no other network access, the worst a prompt injection there can do is produce a wrong answer, which the merchant can check against the case page.
 
-### 7.9 Background processing (Render Workflows)
+### 7.9 Background processing
 - `analyze_case(case_id)` task: extraction → forensics → verify → draft; it retries on a transient Groq or PayPal error.
 - `run_eval(split)` fans out one task per eval case, then aggregates metrics.
-- Fallback if Workflows isn't available on our plan: FastAPI `BackgroundTasks` locally, and a single worker on Render.
+- **Current state:** `RENDER_WORKFLOWS_ENABLED=false`. Analysis uses FastAPI `BackgroundTasks` in the API process, on one instance. Uploads live on the API's persistent disk, which a workflow task cannot read, so turning Workflows on first needs uploads in storage both can reach.
 
 ## 8. Data model (SQLModel)
 
@@ -319,11 +319,11 @@ A **20% held-out split** is never used while tuning prompts.
 | p95 latency | ≤ 15 s per case |
 
 ### 9.4 How it runs
-- `make eval` → full run on **Render Workflows** (or locally) → `eval/reports/<timestamp>.json` + `latest.json` + a Markdown summary.
+- `make eval` → full local run → `eval/reports/<timestamp>.json` + `latest.json` + a Markdown summary.
 - `make eval-quick` → 20 stratified cases before every prompt change.
 - **Merge rule:** a prompt or model change is kept only if the false-alarm rate doesn't rise and injection robustness stays at 100%.
 - Unit tests for `verify/` are independent of the LLM.
-- README ablation: results with vs without forensic signals.
+- Forensic signals only change the risk score, never the verdict, so there is no with/without comparison to report on verdict metrics.
 
 ## 10. Security — built in, not bolted on
 
@@ -425,7 +425,7 @@ proofcheck/
 - [ ] Hosted demo URL on Render, plus sandbox test logins (buyer, merchant) in the README
 - [ ] Local setup instructions as a fallback (`make dev`)
 - [ ] Text description of features
-- [ ] **"Tools used" section copied from §5**: Groq API with Qwen and OpenAI gpt-oss models (extraction, drafting, Copilot), PayPal REST APIs (Orders v2, Payments v2, Disputes v1, Webhooks, tracking), JS SDK v6, Agent Toolkit, AI Toolkit plugin + MCP server (dev), APIMatic Context Plugin (dev), Postman, AG Grid / AG Studio, Render (+ Workflows); and a note on what is not used and why
+- [ ] **"Tools used" section copied from §5**: Groq API with Qwen and OpenAI gpt-oss models (extraction, drafting, Copilot), PayPal REST APIs (Orders v2, Payments v2, Disputes v1, Webhooks, tracking), JS SDK v6, Agent Toolkit, AI Toolkit plugin + MCP server (dev), APIMatic Context Plugin (dev), Postman, AG Grid / AG Studio, Render; and a note on what is not used and why
 - [ ] Postman collection link
 - [ ] APIMatic subscription form submitted (eligible because the Context Plugin was used)
 - [ ] Demo video under 3 minutes, public on YouTube, no copyrighted music or third-party trademarks

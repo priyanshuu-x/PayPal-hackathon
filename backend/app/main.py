@@ -17,6 +17,8 @@ from app.api import (
     routes_cases,
     routes_copilot,
     routes_demo,
+    routes_eval,
+    routes_insights,
     routes_refunds,
     routes_store,
     routes_webhooks,
@@ -142,6 +144,8 @@ def create_app() -> FastAPI:
         routes_refunds.router,
         routes_cases.router,
         routes_copilot.router,
+        routes_insights.router,
+        routes_eval.router,
         routes_webhooks.router,
     ]
     if settings.demo_mode:

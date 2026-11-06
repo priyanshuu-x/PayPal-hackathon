@@ -1,0 +1,144 @@
+# Render Blueprint for ProofCheck: API (web service), frontend (static site), Postgres.
+# Setup steps and known limits: docs/deploy.md. No secret values in this file: anything marked
+# `sync: false` is typed into the Render dashboard (CLAUDE.md rule 8). Sandbox only (rule 9).
+
+services:
+  - type: web
+    name: proofcheck-api
+    runtime: python
+    region: oregon
+    plan: 1c-2g # paid: persistent disks are not available on free services
+    rootDir: backend
+    # psycopg2-binary is the Postgres driver; it is not in backend/pyproject.toml yet (docs/deploy.md).
+    buildCommand: >-
+      pip install -e . &&
+      pip install --no-deps -r requirements-paypal-toolkit.txt &&
+      pip install psycopg2-binary==2.9.13
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    disk:
+      name: proofcheck-uploads # private evidence files, never served from a public path
+      mountPath: /var/data
+      sizeGB: 1
+    buildFilter:
+      paths:
+        - backend/**
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.18
+
+      # PayPal (sandbox app)
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: PAYPAL_SDK_DOMAINS
+        sync: false # the static site's host, once it exists
+
+      # AI
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL_VISION
+        value: qwen/qwen3.8-27b
+      - key: GROQ_MODEL_TEXT
+        value: openai/gpt-oss-120b
+      - key: COPILOT_MAX_TOOL_CALLS
+        value: 5
+      - key: DAILY_LLM_CALL_CAP
+        value: 500
+
+      # Storage
+      - key: DATABASE_URL
+        fromDatabase:
+          name: proofcheck-db
+          property: connectionString
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: RETENTION_DAYS
+        value: 30
+
+      # Analysis runs in the API process. Render Workflows runs cannot read the disk above, so
+      # this stays off until uploads move to shared storage (docs/deploy.md).
+      - key: RENDER_WORKFLOWS_ENABLED
+        value: "false"
+
+      # App
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DEMO_MERCHANT_EMAIL
+        sync: false
+      - key: DEMO_MERCHANT_PASSWORD_HASH
+        sync: false # python -m app.security.auth
+      - key: STORE_NAMES
+        value: Lotus & Loom Demo Store
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: TRUSTED_PROXY_COUNT
+        value: 1 # confirm after the first deploy (docs/deploy.md)
+      - key: DEMO_MODE
+        value: "true" # enables POST /api/demo/disputes for the sandbox demo
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false # the static site's URL
+
+  - type: web
+    name: proofcheck-web
+    runtime: static
+    buildCommand: cd frontend && npm ci --include=dev && npm run build
+    staticPublishPath: ./frontend/dist
+    buildFilter:
+      paths:
+        - frontend/**
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: VITE_AG_STUDIO_LICENSE_KEY
+        sync: false # ends up in the browser bundle, as AG Studio expects
+    routes:
+      # Same-origin API, so the SameSite=Lax session cookies are sent. Must stay before the SPA
+      # rule. If Render gives the API another hostname, change it here (docs/deploy.md).
+      - type: rewrite
+        source: /api/*
+        destination: https://proofcheck-api.onrender.com/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # www.sandbox.paypal.com is the JS SDK v6 (scripts, frames, its own API calls). Styles need
+      # 'unsafe-inline' because AG Grid and AG Studio inject them at runtime; scripts do not.
+      - path: /*
+        name: Content-Security-Policy
+        value: >-
+          default-src 'self';
+          script-src 'self' https://www.sandbox.paypal.com;
+          style-src 'self' 'unsafe-inline';
+          img-src 'self' data: https://www.sandbox.paypal.com https://www.paypalobjects.com;
+          font-src 'self' data:;
+          connect-src 'self' https://www.sandbox.paypal.com;
+          frame-src https://www.sandbox.paypal.com;
+          worker-src 'self' blob:;
+          object-src 'none';
+          base-uri 'self';
+          form-action 'self';
+          frame-ancestors 'none'
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+
+databases:
+  - name: proofcheck-db
+    databaseName: proofcheck
+    region: oregon
+    plan: basic-256mb # free databases expire after 30 days, which could fall during judging
+    postgresMajorVersion: "17"

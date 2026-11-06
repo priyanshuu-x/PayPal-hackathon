@@ -32,6 +32,14 @@ jobs:
       - name: pytest
         working-directory: backend
         run: pytest --cov=app.verify --cov=app.drafting.grounding --cov=app.copilot.toolkit --cov=app.security.ratelimit --cov=app.security.retention --cov-branch --cov-fail-under=100
+      # The platform folders use the same Python tooling. They may not exist on older branches.
+      - name: scripts and eval
+        run: |
+          for dir in scripts eval; do
+            if [ -d "$dir/tests" ]; then
+              ruff check "$dir" && ruff format --check "$dir" && pytest "$dir"
+            fi
+          done
 
   frontend:
     runs-on: ubuntu-latest
