@@ -9,7 +9,7 @@ from app.config import Settings
 from app.db.models import LlmUsage
 from app.db.session import create_db_and_tables, make_engine
 from app.llm.budget import try_consume
-from app.llm.groq_client import GROQ_BASE_URL, GroqClient, LLMError
+from app.llm.groq_client import GROQ_BASE_URL, GroqClient, LLMError, _retry_after_seconds
 from tests.conftest import FAKE_GROQ_KEY
 
 
@@ -86,7 +86,7 @@ async def test_a_rate_limit_wait_is_honoured_up_to_a_minute(groq: respx.MockRout
     groq.post("/chat/completions").mock(
         side_effect=[
             httpx.Response(429, headers={"Retry-After": "21.6"}),  # what Groq's free tier says
-            httpx.Response(429, headers={"Retry-After": "9999"}),  # absurd: capped
+            httpx.Response(429, headers={"Retry-After": "59.9"}),  # top of the window: capped
             httpx.Response(503),  # no header: our own backoff
             _ok("done"),
         ]
@@ -94,6 +94,78 @@ async def test_a_rate_limit_wait_is_honoured_up_to_a_minute(groq: respx.MockRout
     client = GroqClient(Settings(_env_file=None, groq_api_key=FAKE_GROQ_KEY), sleep=record)
     assert await client.chat(model="m", messages=[]) == "done"
     assert waits == [pytest.approx(22.1), 60.0, 4.0]
+    await client.aclose()
+
+
+DAILY_BODY = (
+    '{"error":{"message":"Rate limit reached for model `m` on tokens per day (TPD): Limit 200000, '
+    'Used 199502, Requested 2846. Please try again in 16m54.336s. Need more tokens?"}}'
+)
+
+
+async def test_a_daily_limit_fails_fast_instead_of_waiting(groq: respx.MockRouter) -> None:
+    waits: list[float] = []
+
+    async def record(seconds: float) -> None:
+        waits.append(seconds)
+
+    route = groq.post("/chat/completions").mock(return_value=httpx.Response(429, text=DAILY_BODY))
+    client = GroqClient(Settings(_env_file=None, groq_api_key=FAKE_GROQ_KEY), sleep=record)
+    with pytest.raises(LLMError) as err:
+        await client.chat(model="m", messages=[])
+    assert route.call_count == 1 and waits == []  # one call, no pointless waiting
+    assert err.value.rate_limited is True and err.value.status_code == 429
+    assert "usage limit" in str(err.value) and "199502" not in str(err.value)
+    await client.aclose()
+
+
+async def test_a_long_retry_after_header_also_fails_fast(groq: respx.MockRouter) -> None:
+    route = groq.post("/chat/completions").mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "1014"})
+    )
+    client = _client()
+    with pytest.raises(LLMError) as err:
+        await client.chat(model="m", messages=[])
+    assert route.call_count == 1 and err.value.rate_limited is True
+    await client.aclose()
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("Please try again in 21.617142857s.", 21.617142857),
+        ("Please try again in 2m5.5s.", 125.5),
+        ("Please try again in 1h2m3s.", 3723.0),
+        ("Please try again in 16m54.336s. Need more", 1014.336),
+        ("something else entirely", None),
+        ("try again in soon", None),
+    ],
+)
+def test_the_wait_is_read_from_the_error_text_when_there_is_no_header(
+    body: str, expected: float | None
+) -> None:
+    response = httpx.Response(429, text=body)
+    assert _retry_after_seconds(response) == (pytest.approx(expected) if expected else None)
+    assert _retry_after_seconds(httpx.Response(500, text=body)) is None  # only 429s are read
+
+
+def test_a_header_beats_the_body_and_a_bad_header_falls_back() -> None:
+    both = httpx.Response(429, headers={"Retry-After": "7"}, text="try again in 5m")
+    assert _retry_after_seconds(both) == 7.0
+    bad = httpx.Response(429, headers={"Retry-After": "tomorrow"}, text="try again in 5m")
+    assert _retry_after_seconds(bad) == 300.0
+
+
+async def test_an_exhausted_short_rate_limit_is_still_marked_rate_limited(
+    groq: respx.MockRouter,
+) -> None:
+    groq.post("/chat/completions").mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "1"})
+    )
+    client = _client()
+    with pytest.raises(LLMError) as err:
+        await client.chat(model="m", messages=[])
+    assert err.value.rate_limited is True
     await client.aclose()
 
 
@@ -115,6 +187,7 @@ async def test_other_4xx_is_not_retried_and_hides_the_body(groq: respx.MockRoute
         await client.chat(model="m", messages=[])
     assert route.call_count == 1
     assert "secret detail" not in str(err.value) and err.value.status_code == 400
+    assert err.value.rate_limited is False
     await client.aclose()
 
 

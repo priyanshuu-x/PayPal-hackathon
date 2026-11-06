@@ -54,6 +54,8 @@ async def extract_claims(
         try:
             reply = await client.chat(model=model, messages=messages, max_tokens=1500)
         except LLMError as exc:
+            if exc.rate_limited:  # the provider's usage limit: say so, do not call it unreadable
+                raise LimitReached from exc
             raise ExtractionFailed("The document could not be read.") from exc
         try:
             return parse_claims(reply)

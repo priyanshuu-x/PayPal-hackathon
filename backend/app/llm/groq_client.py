@@ -7,6 +7,7 @@ Authorization header. Response bodies are never put into exception messages.
 
 import asyncio
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -31,9 +32,12 @@ Sleep = Callable[[float], Awaitable[None]]
 class LLMError(Exception):
     """The model call failed. The message is generic; details go to redacted logs."""
 
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+    def __init__(
+        self, message: str, *, status_code: int | None = None, rate_limited: bool = False
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.rate_limited = rate_limited  # the provider's usage limit, not a failure of ours
 
 
 class GroqClient:
@@ -86,8 +90,18 @@ class GroqClient:
                 await self._sleep(_backoff(attempt, None))
                 continue
 
+            wait = _retry_after_seconds(response)
+            if response.status_code == 429 and wait is not None and wait > MAX_RETRY_AFTER:
+                # A daily limit (tokens per day) will not clear in a minute. Waiting and retrying
+                # would only hold the case for minutes, so fail now and let the caller say so.
+                logger.warning("llm_daily_limit", extra={"retry_after_seconds": int(wait)})
+                raise LLMError(
+                    "The AI service's usage limit has been reached.",
+                    status_code=429,
+                    rate_limited=True,
+                )
             if response.status_code in (429, 500, 502, 503, 504) and not last:
-                await self._sleep(_backoff(attempt, response.headers.get("Retry-After")))
+                await self._sleep(_backoff(attempt, wait))
                 continue
             if response.status_code != 200:
                 logger.warning(
@@ -97,6 +111,7 @@ class GroqClient:
                 raise LLMError(
                     "The AI service could not process this request.",
                     status_code=response.status_code,
+                    rate_limited=response.status_code == 429,
                 )
             return _message_text(response)
         raise LLMError("The AI service failed after retries.")  # pragma: no cover
@@ -112,10 +127,25 @@ def _message_text(response: httpx.Response) -> str:
     return content
 
 
-def _backoff(attempt: int, retry_after: str | None) -> float:
-    if retry_after:
+_TRY_AGAIN = re.compile(r"try again in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", re.IGNORECASE)
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    """How long Groq says to wait: the Retry-After header, else its 'try again in 16m54.3s'."""
+    header = response.headers.get("Retry-After")
+    if header:
         try:
-            return min(float(retry_after) + 0.5, MAX_RETRY_AFTER)
+            return float(header)
         except ValueError:
             pass
+    match = _TRY_AGAIN.search(response.text[:1000]) if response.status_code == 429 else None
+    if match and any(match.groups()):
+        hours, minutes, seconds = (float(g) if g else 0.0 for g in match.groups())
+        return hours * 3600 + minutes * 60 + seconds
+    return None
+
+
+def _backoff(attempt: int, wait: float | None) -> float:
+    if wait is not None:
+        return min(wait + 0.5, MAX_RETRY_AFTER)
     return min(1.0 * (2**attempt), MAX_BACKOFF)

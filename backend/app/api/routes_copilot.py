@@ -1,6 +1,7 @@
 """Case Copilot endpoints. Read-only: it can look things up and explain, never change anything."""
 
 import json
+import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -17,6 +18,7 @@ from app.db.models import Case, CheckResult, CopilotTurn
 from app.llm.budget import try_consume
 from app.security.auth import MerchantSession
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/cases", tags=["copilot"])
 
 MAX_QUESTION_CHARS = 500
@@ -82,11 +84,17 @@ async def ask_copilot(
     if not throttle.allow(session.merchant_id):
         raise ApiError(429, "rate_limited", "Too many questions. Try again in a few minutes.")
 
-    result = await copilot.ask(
-        body.question,
-        build_context(db, case),
-        lambda: try_consume(db, settings.daily_llm_call_cap),
-    )
+    try:
+        result = await copilot.ask(
+            body.question,
+            build_context(db, case),
+            lambda: try_consume(db, settings.daily_llm_call_cap),
+        )
+    except Exception as exc:  # the AI provider is down or over its limit; never a bare 500
+        logger.warning("copilot_failed", extra={"case_id": case.id, "error": type(exc).__name__})
+        raise ApiError(
+            502, "upstream_error", "The assistant is unavailable right now. Try again shortly."
+        ) from exc
     names = [call.name for call in result.tool_calls]
     db.add(
         CopilotTurn(
