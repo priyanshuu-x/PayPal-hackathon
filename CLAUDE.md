@@ -26,7 +26,7 @@ The hackathon expects its listed resources to be used. Keep these uses real and 
 | **PayPal AI docs** (docs.paypal.ai: Agent Toolkit quickstart, MCP server quickstart) | Linked from `copilot/toolkit.py` and `docs/architecture.md` | Reference |
 | **APIMatic Context Plugin for PayPal** | Your Claude Code setup (not in repo) | Dev |
 | **Postman** (PayPal public collection; our collection) | `postman/` | Dev + judges |
-| **Render** (web service, static site, Postgres, **Render Workflows**) | `render.yaml`, `backend/app/workflows/` | Runtime |
+| **Render** (web service, static site, Postgres; Render Workflows code is included but off, see `plan.md` §7.9) | `render.yaml`, `backend/app/workflows/` | Runtime |
 | **AG Grid / AG Studio** (boilerplate `paypaldev/hackathon-paypal-ag-grid-boilerplate`) | `frontend/src/dashboard/` (AG Grid), `frontend/src/insights/` (AG Studio) | Runtime |
 | Invoicing (stretch: InvoiceShield), Elastic (stretch), Zapier MCP (stretch) | `stretch/` branches only | Stretch |
 | Not used: Pay Later, Subscriptions, Payouts, Donations, payment links, Channel3, KERNEL, Astropods, Bryntum | — | Reasons in `plan.md` §5 |
@@ -99,7 +99,7 @@ make test          # pytest (unit + integration with mocked PayPal) + frontend t
 make lint          # ruff, ruff format --check, mypy, eslint, tsc
 make seed          # scripts/seed_sandbox.py: demo orders with items, shipping, tracking
 make eval-quick    # 20 stratified eval cases; run before and after any prompt/model/Copilot change
-make eval          # full eval (Render Workflows if configured, else local); writes eval/reports/
+make eval          # full local eval; writes eval/reports/
 make demo-reset    # reset demo cases before recording the video
 make postman       # export/refresh postman/ProofCheck.postman_collection.json from the OpenAPI schema
 ```
