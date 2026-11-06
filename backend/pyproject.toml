@@ -11,7 +11,7 @@ dependencies = [
     "pydantic-settings==2.7.0",
     "httpx==0.28.1",
     "psycopg2-binary==2.9.13",  # Postgres driver for SQLModel on Render
-    "sqlmodel==0.0.22",
+    "sqlmodel==0.0.48",
     "python-multipart==0.0.33",
     "pillow==13.0.0",
     "pypdf==6.21.4",
