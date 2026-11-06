@@ -129,7 +129,11 @@ def check_items(claimed: ClaimedFacts, record: PayPalRecord) -> CheckOutcome:
             problems += 1
             continue
         price = normalise_amount(item.unit_price)
-        if price is not None and abs(price - best.unit_price) > AMOUNT_TOLERANCE:
+        # Receipts print either the unit price or the line total (quantity x unit price), and a
+        # model transcribing the price column cannot tell which. Either is correct; anything
+        # else is a mismatch. (The order total is checked separately and stays exact.)
+        accepted = (best.unit_price, best.unit_price * best.quantity)
+        if price is not None and all(abs(price - ok) > AMOUNT_TOLERANCE for ok in accepted):
             problems += 1
     if problems:
         return CheckOutcome(

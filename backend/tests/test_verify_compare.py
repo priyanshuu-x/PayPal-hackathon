@@ -104,6 +104,26 @@ def _items(*items: ClaimedItem) -> dict[str, Any]:
             {},
             ("match", "info"),
         ),
+        (  # receipts often print the line total (2 x 24.00) instead of the unit price
+            _items(ClaimedItem(name="Lotus Linen Tote", quantity=2, unit_price="48.00")),
+            {},
+            ("match", "info"),
+        ),
+        (
+            _items(ClaimedItem(name="Lotus Linen Tote", quantity=2, unit_price="$48.01")),
+            {},
+            ("match", "info"),  # inside the one-cent tolerance
+        ),
+        (  # neither the unit price nor the line total
+            _items(ClaimedItem(name="Lotus Linen Tote", quantity=2, unit_price="36.00")),
+            {},
+            ("mismatch", "major"),
+        ),
+        (  # a changed quantity is still caught even when the price matches the line total
+            _items(ClaimedItem(name="Lotus Linen Tote", quantity=3, unit_price="48.00")),
+            {},
+            ("mismatch", "major"),
+        ),
         (
             _items(ClaimedItem(name="  lotus  LINEN tote ")),
             {},
