@@ -39,7 +39,7 @@ These could not be confirmed from Render's docs or tested locally. Do them in th
 
 | # | Check | How | If it fails |
 |---|---|---|---|
-| 1 | API is up with Postgres | `https://<api-host>/api/health` returns `{"status":"ok"}`; the deploy log has no driver error | See "Postgres driver" below |
+| 1 | API is up with Postgres | `https://<api-host>/api/health` returns `{"status":"ok"}`; the deploy log has no driver error | Check the deploy log and `DATABASE_URL` |
 | 2 | Rewrite passes POST bodies and cookies | Sign in at `https://<web-host>/merchant`, reload the page, and stay signed in | See "If the rewrite drops cookies" below |
 | 3 | Client IP is right | Compare the IP in the API logs with your own. Then try 6 wrong passwords from a browser, and confirm another network can still sign in | Change `TRUSTED_PROXY_COUNT`. The rewrite may add a hop, so 2 may be right. Too low makes all visitors share one rate limit; too high lets a client fake its IP |
 | 4 | PayPal SDK under the CSP | Open `/checkout`, then check the browser console for "Content Security Policy" errors. Complete one sandbox payment | Add the blocked PayPal host to the `Content-Security-Policy` value in `render.yaml` |
@@ -49,13 +49,13 @@ These could not be confirmed from Render's docs or tested locally. Do them in th
 
 ## Known limits
 
-**Postgres driver.** The backend has no Postgres driver in `backend/pyproject.toml`, so `postgresql://` URLs fail with `No module named 'psycopg2'`. The Blueprint installs `psycopg2-binary` in its build command to work around this. It should move to `pyproject.toml`, so `pip-audit` covers it (backend owner). The backend has only been run on SQLite so far, so check 1 is the first real Postgres run.
+**Postgres.** The app has been tested on a local Postgres 17 with stand-in extraction and PayPal data, but not yet with real PayPal or model calls, or on Render.
 
-**Render Workflows is off.** `RENDER_WORKFLOWS_ENABLED` is `false`. Uploaded files live on the API's persistent disk, and a disk can only be read by its own service, so a workflow task could not read the evidence. Analysis runs in the API process through the existing `BackgroundTasks` fallback, which `plan.md` §12 allows. Turning Workflows on needs uploads moved to storage both can reach (for example the database or object storage). Until then, **the README must not claim Render Workflows is used** (`CLAUDE.md`), and `plan.md` §5 should be updated.
+**Render Workflows is off.** `RENDER_WORKFLOWS_ENABLED` is `false`. Uploaded files live on the API's persistent disk, and a disk can only be read by its own service, so a workflow task could not read the evidence. Analysis runs in the API process through the existing `BackgroundTasks` fallback, which `plan.md` §12 allows. Turning Workflows on needs uploads moved to storage both can reach (for example the database or object storage). `plan.md` and the README say this too. Do not claim Workflows is used unless this changes (`CLAUDE.md`).
 
 **One API instance.** A persistent disk limits the service to one instance and removes zero-downtime deploys, so expect a short gap during a deploy. Do not deploy during judging.
 
-**Missing routes.** `GET /api/eval/latest` and `GET /api/insights/summary` are not on the backend. The eval page shows "No eval report has been published yet" until the first one exists, and also needs `eval/reports/latest.json` to be available to the API at runtime: the Blueprint's `rootDir` is `backend`, but the repo is still checked out in full.
+**Eval report.** `GET /api/eval/latest` reads `eval/reports/latest.json`, so the eval page shows "No eval report has been published yet" until a real `make eval` report is committed and deployed.
 
 ## If the rewrite drops cookies
 
