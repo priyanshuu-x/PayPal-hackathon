@@ -1,9 +1,16 @@
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router';
 import { AppShell, ComingSoon, type NavItem } from './components/app-shell';
+import { MerchantGate } from './dashboard/merchant-gate';
+import { CartProvider } from './store/cart';
+import { CheckoutPage } from './store/checkout-page';
+import { OrdersPage } from './store/orders-page';
+import { RefundPage } from './store/refund-page';
+import { ShopPage } from './store/shop-page';
 
 // Two areas: the fictional demo store for sandbox buyers, and the merchant app under /merchant.
 const storeNav: NavItem[] = [
   { to: '/', label: 'Shop' },
+  { to: '/checkout', label: 'Checkout' },
   { to: '/orders', label: 'My orders' },
 ];
 
@@ -16,26 +23,32 @@ const merchantNav: NavItem[] = [
 const router = createBrowserRouter([
   {
     element: (
-      <AppShell area="Lotus & Loom Demo Store" nav={storeNav}>
-        <Outlet />
-      </AppShell>
+      <CartProvider>
+        <AppShell area="Lotus & Loom Demo Store" nav={storeNav}>
+          <Outlet />
+        </AppShell>
+      </CartProvider>
     ),
     children: [
-      { path: '/', element: <ComingSoon title="Shop" pr="B3 (demo store, JS SDK v6 checkout)" /> },
-      { path: '/orders', element: <ComingSoon title="My orders" pr="B3 (orders and refund form)" /> },
+      { path: '/', element: <ShopPage /> },
+      { path: '/checkout', element: <CheckoutPage /> },
+      { path: '/orders', element: <OrdersPage /> },
+      { path: '/orders/:orderId/refund', element: <RefundPage /> },
     ],
   },
   {
     path: '/merchant',
     element: (
       <AppShell area="Merchant" nav={merchantNav}>
-        <Outlet />
+        <MerchantGate />
       </AppShell>
     ),
     children: [
-      { index: true, element: <ComingSoon title="Cases" pr="B6 (AG Grid case list and case detail)" /> },
-      { path: 'insights', element: <ComingSoon title="Insights" pr="B8 (AG Studio dashboard)" /> },
-      { path: 'eval', element: <ComingSoon title="Eval report" pr="B8 (eval report page)" /> },
+      // Loaded on demand, so store buyers never download AG Grid or AG Studio.
+      { index: true, lazy: async () => ({ Component: (await import('./dashboard/cases-page')).CasesPage }) },
+      { path: 'cases/:caseId', lazy: async () => ({ Component: (await import('./dashboard/case-detail-page')).CaseDetailPage }) },
+      { path: 'insights', lazy: async () => ({ Component: (await import('./insights/insights-page')).InsightsPage }) },
+      { path: 'eval', lazy: async () => ({ Component: (await import('./insights/eval-page')).EvalPage }) },
     ],
   },
   { path: '*', element: <ComingSoon title="Page not found" pr="no PR: check the address" /> },

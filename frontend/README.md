@@ -21,6 +21,8 @@ npm test           # vitest
 npm run build
 ```
 
+For local http dev, run the backend with `COOKIE_SECURE=false`, otherwise the browser drops the buyer and merchant session cookies. The checkout needs the sandbox `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in `.env`; without them `GET /api/store/sdk-config` returns 502 and the checkout shows that PayPal is unavailable.
+
 `VITE_*` values (`VITE_PAYPAL_CLIENT_ID`, `VITE_AG_STUDIO_LICENSE_KEY`) are read from the repo-root `.env` (see `.env.example`). Anything prefixed `VITE_` ends up in the browser bundle, so only public-by-design values go there.
 
 ## Rules that lint enforces
