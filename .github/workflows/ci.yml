@@ -17,7 +17,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/pyproject.toml
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - run: uv pip install --system -e "backend[dev]"
@@ -69,7 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Audit the exact backend dependency set
