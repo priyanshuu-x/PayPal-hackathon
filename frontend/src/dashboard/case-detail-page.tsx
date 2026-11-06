@@ -7,6 +7,7 @@ import { attachEvidence, evidenceUrl, getCase, reanalyzeCase } from '@/api/endpo
 import type { CaseDetail, CheckResult } from '@/api/types';
 import { errorMessage, formatDate, formatMoney } from '@/store/format';
 import { ACCEPTED_TYPES, MAX_UPLOAD_BYTES } from '@/store/validation';
+import { CopilotPanel } from './copilot-panel';
 import { DecisionPanel } from './decision-panel';
 import { fieldLabel, isAnalysing, SOURCE_LABELS, sortChecks, STATUS_LABELS, VERDICT_LABELS, VERDICT_STYLES } from './labels';
 
@@ -61,6 +62,7 @@ export function CaseDetailPage() {
               <ComparisonTable checks={detail.checks} />
               <PayPalRecordCard detail={detail} />
               <DecisionPanel key={detail.id} detail={detail} onChanged={onChanged} />
+              <CopilotPanel key={`copilot-${detail.id}`} caseId={detail.id} />
               <AuditTrail detail={detail} />
             </div>
           </div>
