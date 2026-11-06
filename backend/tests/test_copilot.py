@@ -683,6 +683,23 @@ def test_the_context_handed_to_the_copilot_leaves_out_document_and_buyer_text(
     assert "ORD-1" in rendered and "Date differs." in rendered
 
 
+def test_an_ai_provider_failure_gives_a_502_not_a_500(
+    client: TestClient, merchant: dict[str, str]
+) -> None:
+    class Failing:
+        async def ask(self, *args: Any, **kwargs: Any) -> Any:
+            raise RuntimeError("429 tokens per day, secret detail")
+
+    seed_case(client)
+    client.app.state.copilot = Failing()  # type: ignore[attr-defined]
+    response = ask(client, merchant)
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "upstream_error"
+    assert "secret detail" not in response.text and "429" not in response.text
+    with Session(client.app.state.engine) as db:  # type: ignore[attr-defined]
+        assert db.exec(select(CopilotTurn)).all() == []  # a failed turn is not logged as answered
+
+
 def test_validation(client: TestClient, merchant: dict[str, str]) -> None:
     seed_case(client)
     client.app.state.copilot = FakeCopilot()  # type: ignore[attr-defined]

@@ -335,6 +335,18 @@ async def test_cap_is_checked_before_each_attempt_including_the_retry(env) -> No
     await client.aclose()
 
 
+async def test_the_providers_usage_limit_is_reported_as_the_analysis_limit(env) -> None:  # type: ignore[no-untyped-def]
+    """Not 'could not read document': the document is fine, the AI service is out of quota."""
+    settings, db, client, groq = env
+    body = "Rate limit reached on tokens per day (TPD). Please try again in 16m54.336s."
+    route = groq.post("/chat/completions").mock(return_value=httpx.Response(429, text=body))
+    evidence = _evidence(db, settings, "c1", png_bytes())
+    outcome = await run_extraction(db, evidence, settings, client)
+    assert outcome.status == "limit_reached" and outcome.reason == "analysis limit reached"
+    assert route.call_count == 1  # no retries against a daily limit
+    await client.aclose()
+
+
 async def test_missing_or_unreadable_file_is_a_failed_extraction(env) -> None:  # type: ignore[no-untyped-def]
     settings, db, client, groq = env
     route = groq.post("/chat/completions").mock(return_value=_reply(GOOD))
