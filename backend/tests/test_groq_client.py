@@ -77,6 +77,26 @@ async def test_retries_429_and_5xx_then_succeeds(groq: respx.MockRouter) -> None
     await client.aclose()
 
 
+async def test_a_rate_limit_wait_is_honoured_up_to_a_minute(groq: respx.MockRouter) -> None:
+    waits: list[float] = []
+
+    async def record(seconds: float) -> None:
+        waits.append(seconds)
+
+    groq.post("/chat/completions").mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "21.6"}),  # what Groq's free tier says
+            httpx.Response(429, headers={"Retry-After": "9999"}),  # absurd: capped
+            httpx.Response(503),  # no header: our own backoff
+            _ok("done"),
+        ]
+    )
+    client = GroqClient(Settings(_env_file=None, groq_api_key=FAKE_GROQ_KEY), sleep=record)
+    assert await client.chat(model="m", messages=[]) == "done"
+    assert waits == [pytest.approx(22.1), 60.0, 4.0]
+    await client.aclose()
+
+
 async def test_gives_up_after_the_retry_budget(groq: respx.MockRouter) -> None:
     route = groq.post("/chat/completions").mock(return_value=httpx.Response(429))
     client = _client()
