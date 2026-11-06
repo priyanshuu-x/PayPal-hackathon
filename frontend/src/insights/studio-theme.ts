@@ -1,21 +1,25 @@
 // AG Studio theme for the Insights page, from the AG Grid + PayPal boilerplate. Every value points
 // at a design token in src/styles/globals.css, the same variables the shell's Tailwind classes use,
 // so Studio renders as part of the page rather than a component embedded in it: change a token
-// there and the shell, widgets, grids and charts all follow. The ProofCheck theme lands in B8.
+// there and the shell, widgets, grids and charts all follow. The first three chart colours are
+// the verdict colours, in the order the verdicts appear in the data (see verdictPalette).
 
 import { studioTheme } from 'ag-studio';
 
 const token = (name: string) => `var(--pp-${name})`;
 const line = (color: string) => ({ width: 1, color: token(color) });
 
+const verdictPalette = ['success', 'warning', 'danger'];
+const chartColour = (i: number) => token(verdictPalette[i] ?? `chart-${i + 1}`);
+
 const palette = Object.fromEntries(
   Array.from({ length: 10 }, (_, i) => [
-    [`chartPaletteFills${i + 1}Color`, token(`chart-${i + 1}`)],
-    [`chartPaletteStrokes${i + 1}Color`, token(`chart-${i + 1}`)],
+    [`chartPaletteFills${i + 1}Color`, chartColour(i)],
+    [`chartPaletteStrokes${i + 1}Color`, chartColour(i)],
   ]).flat(),
 );
 
-export const agStudioPayPalTheme = studioTheme.withParams({
+export const proofCheckTheme = studioTheme.withParams({
   // Shared by Studio's UI, grids and charts.
   fontFamily: token('font'),
   fontSize: 14,
