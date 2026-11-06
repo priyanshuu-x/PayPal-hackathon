@@ -25,6 +25,7 @@ dev:
 
 test:
 	cd backend && ../$(PY) -m pytest --cov=app.verify --cov=app.drafting.grounding --cov=app.copilot.toolkit --cov=app.security.ratelimit --cov=app.security.retention --cov-branch --cov-fail-under=100
+	@for dir in scripts eval; do if [ -d $$dir/tests ]; then $(PY) -m pytest $$dir || exit 1; fi; done
 ifneq ($(HAS_FRONTEND),)
 	cd frontend && npm test --if-present
 endif
@@ -33,6 +34,7 @@ lint:
 	cd backend && ../$(PY) -m ruff check .
 	cd backend && ../$(PY) -m ruff format --check .
 	cd backend && ../$(PY) -m mypy app
+	@for dir in scripts eval; do if [ -d $$dir/tests ]; then $(PY) -m ruff check $$dir && $(PY) -m ruff format --check $$dir || exit 1; fi; done
 ifneq ($(HAS_FRONTEND),)
 	cd frontend && npm run lint --if-present && npx tsc --noEmit
 endif
