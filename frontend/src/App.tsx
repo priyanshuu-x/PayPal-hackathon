@@ -1,5 +1,8 @@
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router';
 import { AppShell, ComingSoon, type NavItem } from './components/app-shell';
+import { CaseDetailPage } from './dashboard/case-detail-page';
+import { CasesPage } from './dashboard/cases-page';
+import { MerchantGate } from './dashboard/merchant-gate';
 import { CartProvider } from './store/cart';
 import { CheckoutPage } from './store/checkout-page';
 import { OrdersPage } from './store/orders-page';
@@ -39,11 +42,12 @@ const router = createBrowserRouter([
     path: '/merchant',
     element: (
       <AppShell area="Merchant" nav={merchantNav}>
-        <Outlet />
+        <MerchantGate />
       </AppShell>
     ),
     children: [
-      { index: true, element: <ComingSoon title="Cases" pr="B6 (AG Grid case list and case detail)" /> },
+      { index: true, element: <CasesPage /> },
+      { path: 'cases/:caseId', element: <CaseDetailPage /> },
       { path: 'insights', element: <ComingSoon title="Insights" pr="B8 (AG Studio dashboard)" /> },
       { path: 'eval', element: <ComingSoon title="Eval report" pr="B8 (eval report page)" /> },
     ],
