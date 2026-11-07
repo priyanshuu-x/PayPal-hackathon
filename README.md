@@ -8,9 +8,9 @@ A fake receipt can look perfect, but it cannot match a record it doesn't control
 
 Built for the PayPal AI Hackathon. **Sandbox only:** no real money or customer data.
 
-- **Demo:** `DEMO URL: TO CONFIRM after deploying`
+- **Demo:** https://proofcheck-web.onrender.com (sandbox only; the first request after idle can take about a minute while the free-plan server wakes up)
 - **Video:** `VIDEO LINK: TO CONFIRM`
-- **Postman collection:** `PUBLISHED LINK: TO CONFIRM` ([files in this repo](postman/))
+- **Postman collection:** https://documenter.getpostman.com/view/57305428/2sBYHYuHhQ ([files in this repo](postman/))
 - **License:** [MIT](LICENSE)
 
 ## The problem
@@ -39,12 +39,19 @@ Sandbox logins for judges:
 
 | Role | Where | Login |
 |---|---|---|
-| Buyer | PayPal popup at checkout | `SANDBOX BUYER LOGIN: TO CONFIRM` |
-| Merchant | `/merchant` | `MERCHANT LOGIN: TO CONFIRM` |
+| Buyer | PayPal popup at checkout | Email `sb-kew9653687070@personal.example.com`, password `^z8OEb-z` (a PayPal sandbox **personal** account, test money only) |
+| Merchant | https://proofcheck-web.onrender.com/merchant | Email `merchant@proofcheck.demo`, password `merchant07` |
 
 1. Open the store, add something to the cart and pay with the sandbox buyer.
-2. In **My orders**, request a refund and attach a receipt.
+2. In **My orders**, request a refund and attach a receipt image that shows the order ID, date, items and total.
 3. Sign in at `/merchant` and open the case: compare the document with PayPal's record, ask the Copilot about it, and approve or decline.
+
+Known limits of this hosted demo:
+
+- It runs on free hosting plans. The server sleeps when idle, uploaded evidence files are kept only until the next restart (cases, verdicts and the audit log stay in the database), and the free database is deleted about 30 days after creation.
+- The AI provider's free tier has a daily token limit. When it is used up, new documents get the verdict `NEEDS_REVIEW` with the reason "analysis limit reached".
+- Signed PayPal dispute webhooks were not exercised end to end in the sandbox. Unsigned events are rejected, and disputes can be demonstrated through demo mode, which creates a dispute case for a paid order and sends nothing to PayPal.
+- The AG Studio Insights page runs without a license key, so it shows a watermark.
 
 ## Architecture
 
@@ -129,14 +136,14 @@ Other commands: `make lint test`, `make seed` (sandbox orders), `make eval-quick
 | **Webhooks** | Yes | `CUSTOMER.DISPUTE.CREATED / UPDATED / RESOLVED`, verified with the verify-webhook-signature API |
 | **Invoicing** | Stretch | InvoiceShield: create test scam-style invoices between sandbox accounts |
 | Pay Later, Subscriptions, Payouts, Donations, Low-code payment links | No | Not related to verifying refund or dispute evidence; using them only to tick a box would weaken the design score |
+| APIMatic Context Plugin for PayPal | No | Not used while building this project, so it is not claimed; PayPal API details came from the official docs and the Postman collection |
+| PayPal AI Toolkit plugin and PayPal MCP server (for Claude Code) | No | Not used while building this project, so they are not claimed. The runtime Case Copilot does use the PayPal Agent Toolkit (listed above), and no MCP server is ever in the runtime path |
 
 ### PayPal — AI and agent development
 | Resource | Used? | How ProofCheck uses it |
 |---|---|---|
 | **PayPal Agent Toolkit** (`paypal-agent-toolkit`, Agent Toolkit quickstart) | Yes, at runtime | Powers the **Case Copilot** (LangChain + Groq-hosted `openai/gpt-oss-120b`) with a read-only tool allowlist (§7.8) |
 | **Agent tools reference** | Yes | Used to choose the read-only allowlist and to confirm that no write tools (e.g. `create_refund`, `accept_dispute_claim`) are enabled |
-| **PayPal AI Toolkit on GitHub** (plugin for Claude Code / Codex / Cursor) | Yes, dev time | Installed in Claude Code: `paypal-best-practices` skill, `/paypal:doctor`, `/paypal:explain-error`, `/paypal:sandbox`, `/paypal:test-accounts`, and the pre-write hook that checks SDK v6 best practices **TO CONFIRM before submitting: keep this row only if the tool was really used.** |
-| **PayPal MCP server** (MCP server quickstart) | Yes, dev time | Connected through the AI Toolkit plugin, so the coding agent can inspect sandbox orders and disputes and create test fixtures. **Not used in the runtime money path** (§10) **TO CONFIRM before submitting: keep this row only if the tool was really used.** |
 | **PayPal AI docs** (docs.paypal.ai) | Yes | Reference for the Agent Toolkit and MCP setup |
 
 ### Sponsor tools
@@ -144,7 +151,6 @@ Other commands: `make lint test`, `make seed` (sandbox orders), `make eval-quick
 |---|---|---|
 | **Render** | Yes | Hosting (web service, static site, Postgres) on Render's free plans (the API sleeps when idle and keeps uploads only temporarily); Render Workflows task code is included (`backend/app/workflows/`), but it is **off in this deployment**: analysis runs in the API process, because a workflow task cannot read the API's local upload folder |
 | **AG Grid / AG Studio** | Yes | Case list grid; **Insights page in AG Studio** with a custom "mismatch types" widget, a ProofCheck theme, verdict-mix and amount-at-risk tiles; frontend started from the **`paypaldev/hackathon-paypal-ag-grid-boilerplate`**; 45-day trial license. Stretch: Studio Agent Framework |
-| **APIMatic** | Yes, dev time | **APIMatic Context Plugin for PayPal** installed in Claude Code, so the coding agent pulls accurate PayPal API context while building `paypal/`. Claim the free subscription through the form on the sponsor page **TO CONFIRM before submitting: keep this row only if the tool was really used.** |
 | **Postman** | Yes | Fork **PayPal's public Postman collection** for the Phase 0 API spikes; publish `postman/ProofCheck.postman_collection.json` (ProofCheck endpoints + the PayPal calls it makes) with an environment file without secrets |
 | **Elastic** | Stretch | Near-duplicate evidence search with image embeddings (catches a reused fake photo with small edits) |
 | **Zapier** | Stretch | Zapier MCP alert to Slack or email when a case needs review |
