@@ -121,7 +121,7 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 ### 5.3 Sponsor tools
 | Sponsor | Used? | How ProofCheck uses it |
 |---|---|---|
-| **Render** | Yes | Hosting (web service, static site, Postgres) using the $50 hackathon credits; Render Workflows task code is included (`backend/app/workflows/`), but it is **off in this deployment**: analysis runs in the API process, because a workflow task cannot read the API's private upload disk |
+| **Render** | Yes | Hosting (web service, static site, Postgres) on Render's free plans (the API sleeps when idle and keeps uploads only temporarily); Render Workflows task code is included (`backend/app/workflows/`), but it is **off in this deployment**: analysis runs in the API process, because a workflow task cannot read the API's local upload folder |
 | **AG Grid / AG Studio** | Yes | Case list grid; **Insights page in AG Studio** with a custom "mismatch types" widget, a ProofCheck theme, verdict-mix and amount-at-risk tiles; frontend started from the **`paypaldev/hackathon-paypal-ag-grid-boilerplate`**; 45-day trial license. Stretch: Studio Agent Framework |
 | **APIMatic** | Yes, dev time | **APIMatic Context Plugin for PayPal** installed in Claude Code, so the coding agent pulls accurate PayPal API context while building `paypal/`. Claim the free subscription through the form on the sponsor page |
 | **Postman** | Yes | Fork **PayPal's public Postman collection** for the Phase 0 API spikes; publish `postman/ProofCheck.postman_collection.json` (ProofCheck endpoints + the PayPal calls it makes) with an environment file without secrets |
@@ -259,7 +259,7 @@ UX rules: show mismatches first; use plain-language reasons; render all LLM text
 ### 7.9 Background processing
 - `analyze_case(case_id)` task: extraction → forensics → verify → draft; it retries on a transient Groq or PayPal error.
 - `run_eval(split)` fans out one task per eval case, then aggregates metrics.
-- **Current state:** `RENDER_WORKFLOWS_ENABLED=false`. Analysis uses FastAPI `BackgroundTasks` in the API process, on one instance. Uploads live on the API's persistent disk, which a workflow task cannot read, so turning Workflows on first needs uploads in storage both can reach.
+- **Current state:** `RENDER_WORKFLOWS_ENABLED=false`. Analysis uses FastAPI `BackgroundTasks` in the API process, on one instance. Uploads live in the API's local (temporary, free-plan) folder, which a workflow task cannot read, so turning Workflows on first needs uploads in storage both can reach.
 
 ## 8. Data model (SQLModel)
 

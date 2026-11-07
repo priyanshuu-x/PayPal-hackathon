@@ -1,12 +1,12 @@
 # Deploying ProofCheck on Render
 
-`render.yaml` defines three things: `proofcheck-api` (FastAPI web service with a 1 GB private disk), `proofcheck-web` (static site) and `proofcheck-db` (Postgres). Everything is sandbox only. Secret values go in the Render dashboard, never in this repo.
+`render.yaml` defines three things: `proofcheck-api` (FastAPI web service), `proofcheck-web` (static site) and `proofcheck-db` (Postgres). Everything is sandbox only. Secret values go in the Render dashboard, never in this repo.
 
 Deploy after the frontend PRs (B1, B3, B6, B7, B8) are merged to `main`: the static site builds from `frontend/`.
 
 ## 1. Create the Blueprint
 
-1. Claim the Render hackathon credits. The paid plans used here cost roughly the price of a small web service plus a small database per month, which the $50 credit should cover through judging. Check current prices in the dashboard before confirming.
+1. The Blueprint uses Render's **free** plans, so no card is needed. See "Free-plan limits" below. (The hackathon credit can later pay for the paid plans: set the API to `starter` with a `disk` at `/var/data` and the database to `basic-256mb`. That needs a card on file.)
 2. In the Render dashboard: **New → Blueprint**, pick this repo and branch `main`.
 3. Render asks for each `sync: false` value:
 
@@ -44,16 +44,21 @@ These could not be confirmed from Render's docs or tested locally. Do them in th
 | 3 | Client IP is right | Compare the IP in the API logs with your own. Then try 6 wrong passwords from a browser, and confirm another network can still sign in | Change `TRUSTED_PROXY_COUNT`. The rewrite may add a hop, so 2 may be right. Too low makes all visitors share one rate limit; too high lets a client fake its IP |
 | 4 | PayPal SDK under the CSP | Open `/checkout`, then check the browser console for "Content Security Policy" errors. Complete one sandbox payment | Add the blocked PayPal host to the `Content-Security-Policy` value in `render.yaml` |
 | 5 | SDK client token accepted | The PayPal button appears on `/checkout` | Check `PAYPAL_SDK_DOMAINS`. See the client ID note in the B3 PR |
-| 6 | Uploads survive a redeploy | Submit a refund, redeploy, open the case: the evidence preview still loads | Check `UPLOAD_DIR` is under `/var/data` |
+| 6 | Uploads are temporary (expected on the free plan) | Submit a refund and open the case: the evidence preview loads. It will not survive a restart or sleep | Not a bug: see "Free-plan limits" |
 | 7 | Full Flow A | Pay, request a refund, see a verdict, approve, see the refund ID | Check the API logs |
 
 ## Known limits
 
 **Postgres.** The app has been tested on a local Postgres 17 with stand-in extraction and PayPal data, but not yet with real PayPal or model calls, or on Render.
 
-**Render Workflows is off.** `RENDER_WORKFLOWS_ENABLED` is `false`. Uploaded files live on the API's persistent disk, and a disk can only be read by its own service, so a workflow task could not read the evidence. Analysis runs in the API process through the existing `BackgroundTasks` fallback, which `plan.md` §12 allows. Turning Workflows on needs uploads moved to storage both can reach (for example the database or object storage). `plan.md` and the README say this too. Do not claim Workflows is used unless this changes (`CLAUDE.md`).
+**Render Workflows is off.** `RENDER_WORKFLOWS_ENABLED` is `false`. Uploaded files live in the API's own local folder, which a workflow task cannot read, so a workflow task could not read the evidence. Analysis runs in the API process through the existing `BackgroundTasks` fallback, which `plan.md` §12 allows. Turning Workflows on needs uploads moved to storage both can reach (for example the database or object storage). `plan.md` and the README say this too. Do not claim Workflows is used unless this changes (`CLAUDE.md`).
 
-**One API instance.** A persistent disk limits the service to one instance and removes zero-downtime deploys, so expect a short gap during a deploy. Do not deploy during judging.
+## Free-plan limits
+
+- **The API sleeps** after about 15 minutes without traffic and takes about 50 seconds to wake. Keep it awake with a free uptime pinger (for example UptimeRobot) requesting `https://<api-host>/api/health` every 5 minutes. Open the site once yourself before recording.
+- **Uploads are temporary.** There is no persistent disk, so `UPLOAD_DIR` is `/tmp/proofcheck-uploads` and evidence files disappear on every restart, sleep or redeploy. Cases, verdicts and the audit log stay in Postgres, but an older case shows no evidence preview. Create the cases for the demo and the video just before using them.
+- **The free database is deleted 30 days after creation.** Note the date (a Blueprint created on Nov 7 expires about Dec 7) and move to a paid plan, or recreate it, if judging runs longer.
+- **One API instance.** Expect a short gap during a deploy. Do not deploy during judging.
 
 **Eval report.** `GET /api/eval/latest` reads `eval/reports/latest.json`, so the eval page shows "No eval report has been published yet" until a real `make eval` report is committed and deployed.
 
