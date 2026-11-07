@@ -10,7 +10,7 @@ Built for the PayPal AI Hackathon. **Sandbox only:** no real money or customer d
 
 - **Demo:** https://proofcheck-web.onrender.com (sandbox only; the first request after idle can take about a minute while the free-plan server wakes up)
 - **Video:** `VIDEO LINK: TO CONFIRM`
-- **Postman collection:** `PUBLISHED LINK: TO CONFIRM` ([files in this repo](postman/))
+- **Postman collection:** https://documenter.getpostman.com/view/57305428/2sBYHYuHhQ ([files in this repo](postman/))
 - **License:** [MIT](LICENSE)
 
 ## The problem
