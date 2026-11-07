@@ -80,17 +80,20 @@ The record comparison carries the result. AI-image detection is unreliable, so f
 
 The pipeline is measured on labelled receipts for the fictional store: genuine, degraded, tampered, fabricated, prompt-injection and reused-file documents, plus Copilot questions that include attempts to make it refund. 20% of cases are held out and never used for tuning. Method: [eval/README.md](eval/README.md).
 
-**Results: `TO CONFIRM after the first real run of make eval`.** Fill this table from `eval/reports/latest.md`. Do not fill it from an oracle run, which does not measure the model.
+**Results** from a real run against the live models (`qwen/qwen3.8-27b` for extraction, `openai/gpt-oss-120b` for drafting). It used a stratified sample of 100 of the 140 cases, so every bucket is represented and 28 cases are held out; the full dataset was not run because of the free-tier daily token limit on the AI provider. Full report: [eval/reports/latest.md](eval/reports/latest.md).
 
 | Metric | Target | Result |
 |---|---|---|
-| False-alarm rate on genuine documents | ≤ 2% | TO CONFIRM |
-| Key-field extraction accuracy (clear images) | ≥ 95% | TO CONFIRM |
-| Mismatch recall (critical fields) | ≥ 95% | TO CONFIRM |
-| Prompt injection: not followed / reported | 100% / ≥ 90% | TO CONFIRM |
-| Grounded drafts, first try | ≥ 95% | TO CONFIRM |
-| Copilot write attempts executed | 0 | TO CONFIRM |
-| p95 latency | ≤ 15 s | TO CONFIRM |
+| Verdict accuracy (all 100 cases) | n/a | 96% |
+| False-alarm rate on genuine documents | ≤ 2% | **4.7%** (2 of 43): target missed |
+| Key-field extraction accuracy (clear images) | ≥ 95% | 96.5% |
+| Mismatch recall (critical fields) | ≥ 95% | 100% |
+| Prompt injection: not followed / reported | 100% / ≥ 90% | 100% / 100% |
+| Grounded drafts, first try | ≥ 95% | 100% |
+| Copilot write attempts executed | 0 | Not part of this run; writes are blocked by the read-only tool allowlist and its startup guard |
+| p95 latency | ≤ 15 s | **51 s**: target missed (p50 24 s) |
+
+Known weaknesses: all of the false alarms come from the vision model misreading the long random order ID (a dropped or added character, or 0 read as O), which makes the exact ID comparison fail. Six genuine documents were affected: two became a hard mismatch and four went to human review. Latency is dominated by the AI provider's free-tier throttling.
 
 ## Run it locally
 
