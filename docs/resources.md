@@ -16,6 +16,7 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 | **Webhooks** | Yes | `CUSTOMER.DISPUTE.CREATED / UPDATED / RESOLVED`, verified with the verify-webhook-signature API |
 | **Invoicing** | Stretch | InvoiceShield: create test scam-style invoices between sandbox accounts |
 | Pay Later, Subscriptions, Payouts, Donations, Low-code payment links | No | Not related to verifying refund or dispute evidence; using them only to tick a box would weaken the design score |
+| APIMatic Context Plugin for PayPal | No | Not used while building this project, so it is not claimed; PayPal API details came from the official docs and the Postman collection |
 
 ## 5.2 PayPal — AI and agent development
 | Resource | Used? | How ProofCheck uses it |
@@ -31,7 +32,6 @@ Source: the hackathon Resources page and the sponsor pages. Every row here must 
 |---|---|---|
 | **Render** | Yes | Hosting (web service, static site, Postgres) on Render's free plans (the API sleeps when idle and keeps uploads only temporarily); Render Workflows task code is included (`backend/app/workflows/`), but it is **off in this deployment**: analysis runs in the API process, because a workflow task cannot read the API's local upload folder |
 | **AG Grid / AG Studio** | Yes | Case list grid; **Insights page in AG Studio** with a custom "mismatch types" widget, a ProofCheck theme, verdict-mix and amount-at-risk tiles; frontend started from the **`paypaldev/hackathon-paypal-ag-grid-boilerplate`**; 45-day trial license. Stretch: Studio Agent Framework |
-| **APIMatic** | Yes, dev time | **APIMatic Context Plugin for PayPal** installed in Claude Code, so the coding agent pulls accurate PayPal API context while building `paypal/`. Claim the free subscription through the form on the sponsor page |
 | **Postman** | Yes | Fork **PayPal's public Postman collection** for the Phase 0 API spikes; publish `postman/ProofCheck.postman_collection.json` (ProofCheck endpoints + the PayPal calls it makes) with an environment file without secrets |
 | **Elastic** | Stretch | Near-duplicate evidence search with image embeddings (catches a reused fake photo with small edits) |
 | **Zapier** | Stretch | Zapier MCP alert to Slack or email when a case needs review |
