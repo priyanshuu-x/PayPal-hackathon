@@ -8,7 +8,7 @@ A fake receipt can look perfect, but it cannot match a record it doesn't control
 
 Built for the PayPal AI Hackathon. **Sandbox only:** no real money or customer data.
 
-- **Demo:** `DEMO URL: TO CONFIRM after deploying`
+- **Demo:** https://proofcheck-web.onrender.com (sandbox only; the first request after idle can take about a minute while the free-plan server wakes up)
 - **Video:** `VIDEO LINK: TO CONFIRM`
 - **Postman collection:** `PUBLISHED LINK: TO CONFIRM` ([files in this repo](postman/))
 - **License:** [MIT](LICENSE)
@@ -39,12 +39,19 @@ Sandbox logins for judges:
 
 | Role | Where | Login |
 |---|---|---|
-| Buyer | PayPal popup at checkout | `SANDBOX BUYER LOGIN: TO CONFIRM` |
-| Merchant | `/merchant` | `MERCHANT LOGIN: TO CONFIRM` |
+| Buyer | PayPal popup at checkout | `SANDBOX BUYER LOGIN: TO CONFIRM` (a PayPal sandbox **personal** account) |
+| Merchant | https://proofcheck-web.onrender.com/merchant | Email `merchant@proofcheck.demo`, password `MERCHANT PASSWORD: TO CONFIRM` |
 
 1. Open the store, add something to the cart and pay with the sandbox buyer.
-2. In **My orders**, request a refund and attach a receipt.
+2. In **My orders**, request a refund and attach a receipt image that shows the order ID, date, items and total.
 3. Sign in at `/merchant` and open the case: compare the document with PayPal's record, ask the Copilot about it, and approve or decline.
+
+Known limits of this hosted demo:
+
+- It runs on free hosting plans. The server sleeps when idle, uploaded evidence files are kept only until the next restart (cases, verdicts and the audit log stay in the database), and the free database is deleted about 30 days after creation.
+- The AI provider's free tier has a daily token limit. When it is used up, new documents get the verdict `NEEDS_REVIEW` with the reason "analysis limit reached".
+- Signed PayPal dispute webhooks were not exercised end to end in the sandbox. Unsigned events are rejected, and disputes can be demonstrated through demo mode, which creates a dispute case for a paid order and sends nothing to PayPal.
+- The AG Studio Insights page runs without a license key, so it shows a watermark.
 
 ## Architecture
 
