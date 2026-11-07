@@ -137,14 +137,13 @@ Other commands: `make lint test`, `make seed` (sandbox orders), `make eval-quick
 | **Invoicing** | Stretch | InvoiceShield: create test scam-style invoices between sandbox accounts |
 | Pay Later, Subscriptions, Payouts, Donations, Low-code payment links | No | Not related to verifying refund or dispute evidence; using them only to tick a box would weaken the design score |
 | APIMatic Context Plugin for PayPal | No | Not used while building this project, so it is not claimed; PayPal API details came from the official docs and the Postman collection |
+| PayPal AI Toolkit plugin and PayPal MCP server (for Claude Code) | No | Not used while building this project, so they are not claimed. The runtime Case Copilot does use the PayPal Agent Toolkit (listed above), and no MCP server is ever in the runtime path |
 
 ### PayPal — AI and agent development
 | Resource | Used? | How ProofCheck uses it |
 |---|---|---|
 | **PayPal Agent Toolkit** (`paypal-agent-toolkit`, Agent Toolkit quickstart) | Yes, at runtime | Powers the **Case Copilot** (LangChain + Groq-hosted `openai/gpt-oss-120b`) with a read-only tool allowlist (§7.8) |
 | **Agent tools reference** | Yes | Used to choose the read-only allowlist and to confirm that no write tools (e.g. `create_refund`, `accept_dispute_claim`) are enabled |
-| **PayPal AI Toolkit on GitHub** (plugin for Claude Code / Codex / Cursor) | Yes, dev time | Installed in Claude Code: `paypal-best-practices` skill, `/paypal:doctor`, `/paypal:explain-error`, `/paypal:sandbox`, `/paypal:test-accounts`, and the pre-write hook that checks SDK v6 best practices **TO CONFIRM before submitting: keep this row only if the tool was really used.** |
-| **PayPal MCP server** (MCP server quickstart) | Yes, dev time | Connected through the AI Toolkit plugin, so the coding agent can inspect sandbox orders and disputes and create test fixtures. **Not used in the runtime money path** (§10) **TO CONFIRM before submitting: keep this row only if the tool was really used.** |
 | **PayPal AI docs** (docs.paypal.ai) | Yes | Reference for the Agent Toolkit and MCP setup |
 
 ### Sponsor tools
