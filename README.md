@@ -39,8 +39,8 @@ Sandbox logins for judges:
 
 | Role | Where | Login |
 |---|---|---|
-| Buyer | PayPal popup at checkout | `SANDBOX BUYER LOGIN: TO CONFIRM` (a PayPal sandbox **personal** account) |
-| Merchant | https://proofcheck-web.onrender.com/merchant | Email `merchant@proofcheck.demo`, password `MERCHANT PASSWORD: TO CONFIRM` |
+| Buyer | PayPal popup at checkout | Email `sb-kew9653687070@personal.example.com`, password `^z8OEb-z` (a PayPal sandbox **personal** account, test money only) |
+| Merchant | https://proofcheck-web.onrender.com/merchant | Email `merchant@proofcheck.demo`, password `merchant07` |
 
 1. Open the store, add something to the cart and pay with the sandbox buyer.
 2. In **My orders**, request a refund and attach a receipt image that shows the order ID, date, items and total.
