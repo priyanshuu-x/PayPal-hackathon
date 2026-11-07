@@ -98,7 +98,7 @@ services:
       # rule. If Render gives the API another hostname, change it here (docs/deploy.md).
       - type: rewrite
         source: /api/*
-        destination: https://proofcheck-api.onrender.com/api/*
+        destination: https://proofcheck-api-8hds.onrender.com/api/*
       - type: rewrite
         source: /*
         destination: /index.html
