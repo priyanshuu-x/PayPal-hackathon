@@ -7,17 +7,13 @@ services:
     name: proofcheck-api
     runtime: python
     region: oregon
-    plan: 1c-2g # paid: persistent disks are not available on free services
+    plan: free # no card needed. Sleeps after ~15 min idle; no persistent disk (docs/deploy.md)
     rootDir: backend
     buildCommand: >-
       pip install -e . &&
       pip install --no-deps -r requirements-paypal-toolkit.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
-    disk:
-      name: proofcheck-uploads # private evidence files, never served from a public path
-      mountPath: /var/data
-      sizeGB: 1
     buildFilter:
       paths:
         - backend/**
@@ -55,12 +51,12 @@ services:
           name: proofcheck-db
           property: connectionString
       - key: UPLOAD_DIR
-        value: /var/data/uploads
+        value: /tmp/proofcheck-uploads # temporary: wiped on every restart or sleep (free plan)
       - key: RETENTION_DAYS
         value: 30
 
-      # Analysis runs in the API process. Render Workflows runs cannot read the disk above, so
-      # this stays off until uploads move to shared storage (docs/deploy.md).
+      # Analysis runs in the API process. Render Workflows runs cannot read the API's local
+      # upload folder, so this stays off until uploads move to shared storage (docs/deploy.md).
       - key: RENDER_WORKFLOWS_ENABLED
         value: "false"
 
@@ -138,5 +134,5 @@ databases:
   - name: proofcheck-db
     databaseName: proofcheck
     region: oregon
-    plan: basic-256mb # free databases expire after 30 days, which could fall during judging
+    plan: free # no card needed, but Render deletes a free database 30 days after creation
     postgresMajorVersion: "17"

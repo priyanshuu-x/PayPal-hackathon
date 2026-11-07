@@ -142,7 +142,7 @@ Other commands: `make lint test`, `make seed` (sandbox orders), `make eval-quick
 ### Sponsor tools
 | Sponsor | Used? | How ProofCheck uses it |
 |---|---|---|
-| **Render** | Yes | Hosting (web service, static site, Postgres) using the $50 hackathon credits; Render Workflows task code is included (`backend/app/workflows/`), but it is **off in this deployment**: analysis runs in the API process, because a workflow task cannot read the API's private upload disk |
+| **Render** | Yes | Hosting (web service, static site, Postgres) on Render's free plans (the API sleeps when idle and keeps uploads only temporarily); Render Workflows task code is included (`backend/app/workflows/`), but it is **off in this deployment**: analysis runs in the API process, because a workflow task cannot read the API's local upload folder |
 | **AG Grid / AG Studio** | Yes | Case list grid; **Insights page in AG Studio** with a custom "mismatch types" widget, a ProofCheck theme, verdict-mix and amount-at-risk tiles; frontend started from the **`paypaldev/hackathon-paypal-ag-grid-boilerplate`**; 45-day trial license. Stretch: Studio Agent Framework |
 | **APIMatic** | Yes, dev time | **APIMatic Context Plugin for PayPal** installed in Claude Code, so the coding agent pulls accurate PayPal API context while building `paypal/`. Claim the free subscription through the form on the sponsor page **TO CONFIRM before submitting: keep this row only if the tool was really used.** |
 | **Postman** | Yes | Fork **PayPal's public Postman collection** for the Phase 0 API spikes; publish `postman/ProofCheck.postman_collection.json` (ProofCheck endpoints + the PayPal calls it makes) with an environment file without secrets |
